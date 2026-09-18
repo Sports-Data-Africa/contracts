@@ -1,0 +1,189 @@
+openapi: 3.0.3
+info:
+  title: SportsData Africa B2B Client API
+  version: 2.0.0
+  description: Authoritative African sports data feeds, live streaming, and optional betting/settlement engine.
+servers:
+  - url: https://api.sportsdata.africa/api/v1
+    description: Production API Gateway
+  - url: https://sandbox.sportsdata.africa/api/v1
+    description: Sandbox Testing Gateway
+paths:
+  /client/sports:
+    get:
+      summary: List Available Sports
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: List of entitled and active sports
+        '401':
+          description: Invalid or missing API key
+  /client/fixtures:
+    get:
+      summary: Discover Fixtures
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: sport_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [NOT_STARTED, IN_PLAY, FINISHED, POSTPONED]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of fixtures
+  /client/fixtures/{fixtureId}/markets:
+    get:
+      summary: Get Fixture Odds & Markets
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: fixtureId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active markets and selection odds
+  /client/fixtures/{fixtureId}/result:
+    get:
+      summary: Get Certified Match Result
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: fixtureId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Certified final score and period scores
+        '404':
+          description: Match not yet finalized or certified
+  /client/ws-token:
+    post:
+      summary: Request WebSocket Handshake Token
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Short-lived token for WebSocket connection
+  /client/bets:
+    post:
+      summary: Place Sports Bet (Option 2 Only)
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [external_bet_id, stake, selections]
+              properties:
+                external_bet_id:
+                  type: string
+                stake:
+                  type: number
+                selections:
+                  type: array
+                  items:
+                    type: object
+                    required: [fixture_id, provider_market_id, provider_selection_id, odds]
+                    properties:
+                      fixture_id:
+                        type: integer
+                      provider_market_id:
+                        type: integer
+                      provider_selection_id:
+                        type: integer
+                      selection_name:
+                        type: string
+                      odds:
+                        type: number
+      responses:
+        '200':
+          description: Bet accepted with immutable snapshot hash
+        '403':
+          description: Forbidden on FEED_ONLY plan
+        '409':
+          description: Odds changed beyond slippage tolerance
+  /client/settlements/{ticketId}:
+    get:
+      summary: Query Settlement Ticket Status (Option 2 Only)
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ticket settlement decision and graded legs
+        '404':
+          description: Ticket not found
+  /client/odds-boost:
+    post:
+      summary: Request Promotional Odds Boost (Option 2 Only)
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '201':
+          description: Boost proposal submitted for SDA Trading Desk review
+  /client/sandbox/generate:
+    post:
+      summary: Generate Synthetic Match (Sandbox Only)
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '201':
+          description: Synthetic match generated
+        '429':
+          description: Daily sport quota exceeded
+  /client/keys:
+    get:
+      summary: List Client API Keys
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Active API keys
+    post:
+      summary: Create Scoped API Key
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '201':
+          description: API key generated
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key

@@ -73,9 +73,10 @@ var CanonicalIDRegex = regexp.MustCompile(`^SPD-(FB|IH|BB|TN|VB|RB|MM|CK|TT)-([0
 type IdentityState string
 
 const (
-	IdentityDiscovered IdentityState = "DISCOVERED"
-	IdentityIdentified IdentityState = "IDENTIFIED"
-	IdentityMapped     IdentityState = "MAPPED"
+	IdentityDiscovered  IdentityState = "DISCOVERED"
+	IdentityIdentified  IdentityState = "IDENTIFIED"
+	IdentityMapped      IdentityState = "MAPPED"
+	IdentityQuarantined IdentityState = "QUARANTINED"
 )
 
 // Verification States
@@ -96,15 +97,39 @@ const (
 	FixtureNotStarted FixtureLifecycleState = "NOT_STARTED"
 	FixtureLive       FixtureLifecycleState = "LIVE"
 	FixtureFinished   FixtureLifecycleState = "FINISHED"
+	FixturePostponed  FixtureLifecycleState = "POSTPONED"
+)
+
+// Betting States
+type BettingState string
+
+const (
+	BettingOpen              BettingState = "OPEN"
+	BettingBettable          BettingState = "BETTABLE"
+	BettingLiveBroadcastOnly BettingState = "LIVE_BROADCAST_ONLY"
+	BettingSuspended         BettingState = "SUSPENDED"
+	BettingClosed            BettingState = "CLOSED"
+	BettingReadOnly          BettingState = "READ_ONLY"
+)
+
+// Settlement Lifecycle States
+type SettlementLifecycleState string
+
+const (
+	SettlementPending   SettlementLifecycleState = "PENDING"
+	SettlementSettled   SettlementLifecycleState = "SETTLED"
+	SettlementReview    SettlementLifecycleState = "REVIEW"
+	SettlementCancelled SettlementLifecycleState = "CANCELLED"
 )
 
 // Mapping Types
 type MappingType string
 
 const (
-	MappingPrematch MappingType = "PREMATCH"
-	MappingLive     MappingType = "LIVE"
-	MappingResult   MappingType = "RESULT"
+	MappingPrematch  MappingType = "PREMATCH"
+	MappingLive      MappingType = "LIVE"
+	MappingResult    MappingType = "RESULT"
+	MappingAutomatic MappingType = "AUTOMATIC"
 )
 
 // FormatCanonicalFixtureID creates a standardized platform canonical fixture ID: SPD-[SPORT]-[6DIGIT].
@@ -153,10 +178,24 @@ func ValidateCanonicalFixtureID(canonicalID string) error {
 }
 
 // NormalizeTeamName prepares a team name for natural identity hashing:
-// lowercased, stripped of common punctuation and excess whitespace.
+// lowercased, stripped of common punctuation, noise words, and excess whitespace.
 func NormalizeTeamName(team string) string {
 	cleaned := strings.ToLower(strings.TrimSpace(team))
-	// Replace common variations
+	// Well-known synonyms & common abbreviations
+	switch cleaned {
+	case "psg":
+		return "paris saint germain"
+	case "man utd", "man united":
+		return "manchester united"
+	case "man city":
+		return "manchester city"
+	case "spurs":
+		return "tottenham"
+	case "wolves":
+		return "wolverhampton"
+	}
+
+	// Strip common punctuation
 	replacer := strings.NewReplacer(
 		".", "",
 		",", "",
@@ -165,25 +204,130 @@ func NormalizeTeamName(team string) string {
 		"/", " ",
 		"'", "",
 		"\"", "",
-		"fc", "",
-		"sc", "",
-		"fk", "",
-		"afc", "",
+		"(", " ",
+		")", " ",
 	)
 	cleaned = replacer.Replace(cleaned)
-	// Collapse multiple spaces
+
 	words := strings.Fields(cleaned)
-	return strings.Join(words, " ")
+	noise := map[string]bool{
+		"fc": true, "cf": true, "sc": true, "fk": true, "afc": true, "ac": true,
+		"cd": true, "as": true, "club": true, "de": true, "the": true,
+		"olympique": true,
+	}
+
+	var filtered []string
+	for _, w := range words {
+		if w == "psg" {
+			filtered = append(filtered, "paris", "saint", "germain")
+			continue
+		}
+		if !noise[w] {
+			filtered = append(filtered, w)
+		}
+	}
+	if len(filtered) == 0 {
+		return strings.Join(words, " ")
+	}
+	return strings.Join(filtered, " ")
+}
+
+// NaturalCandidate encapsulates structured attributes identifying a real sporting fixture.
+type NaturalCandidate struct {
+	SportID           int       `json:"sport_id"`
+	HomeTeam          string    `json:"home_team"`
+	AwayTeam          string    `json:"away_team"`
+	ScheduledStart    time.Time `json:"scheduled_start"`
+	CompetitionID     string    `json:"competition_id,omitempty"`
+	CompetitionName   string    `json:"competition_name,omitempty"`
+	Gender            string    `json:"gender,omitempty"`        // MEN, WOMEN, UNKNOWN
+	AgeCategory       string    `json:"age_category,omitempty"`  // SENIOR, U23, U21, U20, U19, U18, YOUTH, UNKNOWN
+	TeamCategory      string    `json:"team_category,omitempty"` // CLUB, RESERVE, NATIONAL, UNKNOWN
+	Country           string    `json:"country,omitempty"`
+	Provider          string    `json:"provider,omitempty"`
+	ProviderFixtureID string    `json:"provider_fixture_id,omitempty"`
+}
+
+// CleanAndClassifyCandidate resolves default categories (gender, age, team category)
+// from team names, competition names, and raw tokens if not explicitly set.
+func (c *NaturalCandidate) CleanAndClassifyCandidate() {
+	combined := strings.ToLower(fmt.Sprintf("%s %s %s", c.HomeTeam, c.AwayTeam, c.CompetitionName))
+
+	// Gender classification
+	if c.Gender == "" || c.Gender == "UNKNOWN" {
+		if strings.Contains(combined, "women") || strings.Contains(combined, "ladies") ||
+			strings.Contains(combined, "(w)") || strings.Contains(combined, " w ") || strings.HasSuffix(combined, " w") {
+			c.Gender = "WOMEN"
+		} else {
+			c.Gender = "MEN"
+		}
+	}
+
+	// Age category classification
+	if c.AgeCategory == "" || c.AgeCategory == "UNKNOWN" {
+		if strings.Contains(combined, "u23") || strings.Contains(combined, "u-23") {
+			c.AgeCategory = "U23"
+		} else if strings.Contains(combined, "u21") || strings.Contains(combined, "u-21") {
+			c.AgeCategory = "U21"
+		} else if strings.Contains(combined, "u20") || strings.Contains(combined, "u-20") {
+			c.AgeCategory = "U20"
+		} else if strings.Contains(combined, "u19") || strings.Contains(combined, "u-19") {
+			c.AgeCategory = "U19"
+		} else if strings.Contains(combined, "u18") || strings.Contains(combined, "u-18") {
+			c.AgeCategory = "U18"
+		} else if strings.Contains(combined, "youth") {
+			c.AgeCategory = "YOUTH"
+		} else {
+			c.AgeCategory = "SENIOR"
+		}
+	}
+
+	// Team category classification
+	if c.TeamCategory == "" || c.TeamCategory == "UNKNOWN" {
+		if strings.Contains(combined, "reserves") || strings.Contains(combined, "reserve") ||
+			strings.Contains(combined, "(res)") || strings.Contains(combined, " ii") || strings.Contains(combined, " 2") {
+			c.TeamCategory = "RESERVE"
+		} else {
+			c.TeamCategory = "CLUB"
+		}
+	}
+}
+
+// NaturalKey computes a deterministic, collision-resistant candidate natural key.
+// It incorporates sport, normalized team names, gender, age category, team category,
+// and rounds kickoff to a half-hour tolerance bucket (absorbing ±15m schedule jitter across providers).
+func (c NaturalCandidate) NaturalKey() string {
+	candidate := c
+	candidate.CleanAndClassifyCandidate()
+
+	normHome := NormalizeTeamName(candidate.HomeTeam)
+	normAway := NormalizeTeamName(candidate.AwayTeam)
+
+	// Half-hour tolerance window: kickoffs scheduled within ±15 minutes fall in the same bucket
+	roundedStart := candidate.ScheduledStart.UTC().Truncate(30 * time.Minute)
+	timeBucket := roundedStart.Format("20060102-1504")
+
+	h := sha256.New()
+	fmt.Fprintf(h, "%d:%s:%s:%s:%s:%s:%s",
+		candidate.SportID,
+		normHome,
+		normAway,
+		candidate.Gender,
+		candidate.AgeCategory,
+		candidate.TeamCategory,
+		timeBucket,
+	)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // NaturalIdentityHash computes a deterministic SHA256 hash identifying a real-world match
-// based on sport, normalized teams, and exact kickoff time.
+// using NaturalCandidate resolution with kickoff tolerance and category separation.
 func NaturalIdentityHash(sportID int, homeTeam, awayTeam string, startTime time.Time) string {
-	normHome := NormalizeTeamName(homeTeam)
-	normAway := NormalizeTeamName(awayTeam)
-	unixSec := startTime.UTC().Unix()
-
-	h := sha256.New()
-	fmt.Fprintf(h, "%d:%s:%s:%d", sportID, normHome, normAway, unixSec)
-	return hex.EncodeToString(h.Sum(nil))
+	c := NaturalCandidate{
+		SportID:        sportID,
+		HomeTeam:       homeTeam,
+		AwayTeam:       awayTeam,
+		ScheduledStart: startTime,
+	}
+	return c.NaturalKey()
 }

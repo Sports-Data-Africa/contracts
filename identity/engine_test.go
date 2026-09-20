@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -89,11 +90,32 @@ func (r *MockRepository) GetCanonicalFixtureByNaturalHash(ctx context.Context, h
 	return f, nil
 }
 
+func (r *MockRepository) PutFixture(f *CanonicalFixture) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if f != nil {
+		r.fixtures[f.CanonicalFixtureID] = f
+		if f.NaturalIdentityHash != "" {
+			r.byHash[f.NaturalIdentityHash] = f
+		}
+	}
+}
+
 func (r *MockRepository) GetOrCreateCanonicalFixture(ctx context.Context, sportID int, homeTeam, awayTeam string, startTime time.Time, compID int64, compName string) (*CanonicalFixture, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	hash := canonical.NaturalIdentityHash(sportID, homeTeam, awayTeam, startTime)
+	candidate := canonical.NaturalCandidate{
+		SportID:         sportID,
+		HomeTeam:        homeTeam,
+		AwayTeam:        awayTeam,
+		ScheduledStart:  startTime,
+		CompetitionID:   fmt.Sprintf("%d", compID),
+		CompetitionName: compName,
+	}
+	candidate.CleanAndClassifyCandidate()
+	hash := candidate.NaturalKey()
+
 	if existing, ok := r.byHash[hash]; ok {
 		return existing, nil
 	}
@@ -111,15 +133,22 @@ func (r *MockRepository) GetOrCreateCanonicalFixture(ctx context.Context, sportI
 		SequenceNumber:      r.seq,
 		SportID:             sportID,
 		SportCode:           canonical.SportIDToCode[sportID],
-		HomeTeam:            homeTeam,
-		AwayTeam:            awayTeam,
-		ScheduledStart:      startTime,
+		HomeTeam:            candidate.HomeTeam,
+		AwayTeam:            candidate.AwayTeam,
+		ScheduledStart:      candidate.ScheduledStart.UTC(),
 		CompetitionID:       compID,
-		CompetitionName:     compName,
+		CompetitionName:     candidate.CompetitionName,
+		Gender:              candidate.Gender,
+		AgeCategory:         candidate.AgeCategory,
+		TeamCategory:        candidate.TeamCategory,
 		NaturalIdentityHash: hash,
 		IdentityState:       canonical.IdentityIdentified,
 		VerificationState:   canonical.VerificationPending,
 		FixtureState:        canonical.FixtureNotStarted,
+		BettingState:        canonical.BettingBettable,
+		SettlementState:     canonical.SettlementPending,
+		SettlementCapable:   true,
+		ResultResolutionKey: hash,
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
@@ -148,6 +177,7 @@ func (r *MockRepository) AttachAlias(ctx context.Context, canonicalID, provider,
 	if existing, ok := r.aliases[key]; ok {
 		if existing.CanonicalFixtureID == canonicalID {
 			existing.LastSeenAt = time.Now().UTC()
+			existing.IsActive = true
 			return existing, nil
 		}
 		// Conflict!
@@ -165,17 +195,20 @@ func (r *MockRepository) AttachAlias(ctx context.Context, canonicalID, provider,
 	}
 
 	now := time.Now().UTC()
+	resPath := fmt.Sprintf("%s:%s", provider, providerFixtureID)
 	alias := &FixtureAlias{
-		ID:                 int64(len(r.aliases) + 1),
-		CanonicalFixtureID: canonicalID,
-		Provider:           provider,
-		ProviderFixtureID:  providerFixtureID,
-		MappingType:        mappingType,
-		Source:             source,
-		FirstSeenAt:        now,
-		LastSeenAt:         now,
-		CreatedAt:          now,
-		UpdatedAt:          now,
+		ID:                   int64(len(r.aliases) + 1),
+		CanonicalFixtureID:   canonicalID,
+		Provider:             provider,
+		ProviderFixtureID:    providerFixtureID,
+		MappingType:          mappingType,
+		Source:               source,
+		IsActive:             true,
+		ResultResolutionPath: resPath,
+		FirstSeenAt:          now,
+		LastSeenAt:           now,
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 	r.aliases[key] = alias
 	return alias, nil
@@ -191,6 +224,98 @@ func (r *MockRepository) GetAliasesForCanonical(ctx context.Context, canonicalID
 		}
 	}
 	return list, nil
+}
+
+func (r *MockRepository) CreateJITCanonicalFixtureTx(ctx context.Context, candidate canonical.NaturalCandidate, provider, providerFixtureID string, mappingType canonical.MappingType, source string) (*CanonicalFixture, *FixtureAlias, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	candidate.CleanAndClassifyCandidate()
+	hash := candidate.NaturalKey()
+
+	var f *CanonicalFixture
+	if existing, ok := r.byHash[hash]; ok {
+		f = existing
+	} else {
+		r.seq++
+		cid, err := canonical.FormatCanonicalFixtureID(candidate.SportID, r.seq)
+		if err != nil {
+			return nil, nil, err
+		}
+		now := time.Now().UTC()
+		f = &CanonicalFixture{
+			ID:                  r.seq,
+			CanonicalFixtureID:  cid,
+			SequenceNumber:      r.seq,
+			SportID:             candidate.SportID,
+			SportCode:           canonical.SportIDToCode[candidate.SportID],
+			HomeTeam:            candidate.HomeTeam,
+			AwayTeam:            candidate.AwayTeam,
+			ScheduledStart:      candidate.ScheduledStart.UTC(),
+			CompetitionName:     candidate.CompetitionName,
+			Gender:              candidate.Gender,
+			AgeCategory:         candidate.AgeCategory,
+			TeamCategory:        candidate.TeamCategory,
+			NaturalIdentityHash: hash,
+			IdentityState:       canonical.IdentityMapped,
+			VerificationState:   canonical.VerificationVerified,
+			FixtureState:        canonical.FixtureLive,
+			BettingState:        canonical.BettingBettable,
+			SettlementState:     canonical.SettlementPending,
+			SettlementCapable:   true,
+			ResultResolutionKey: hash,
+			CreatedAt:           now,
+			UpdatedAt:           now,
+		}
+		r.fixtures[cid] = f
+		r.byHash[hash] = f
+	}
+
+	key := fmt.Sprintf("%s:%s", provider, providerFixtureID)
+	now := time.Now().UTC()
+	alias := &FixtureAlias{
+		ID:                   int64(len(r.aliases) + 1),
+		CanonicalFixtureID:   f.CanonicalFixtureID,
+		Provider:             provider,
+		ProviderFixtureID:    providerFixtureID,
+		MappingType:          mappingType,
+		Source:               source,
+		IsActive:             true,
+		ResultResolutionPath: hash,
+		FirstSeenAt:          now,
+		LastSeenAt:           now,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+	r.aliases[key] = alias
+
+	return f, alias, nil
+}
+
+func (r *MockRepository) ResolveCandidate(ctx context.Context, candidate canonical.NaturalCandidate) (ResolutionOutcome, *CanonicalFixture, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	normHome := canonical.NormalizeTeamName(candidate.HomeTeam)
+	normAway := canonical.NormalizeTeamName(candidate.AwayTeam)
+	if len(normHome) < 2 || len(normAway) < 2 || strings.EqualFold(normHome, normAway) {
+		return OutcomeAmbiguous, nil, nil
+	}
+
+	bannedTokens := map[string]bool{
+		"team a": true, "team b": true, "home": true, "away": true,
+		"player a": true, "player b": true, "tbd": true, "unknown": true,
+	}
+	if bannedTokens[normHome] || bannedTokens[normAway] {
+		return OutcomeAmbiguous, nil, nil
+	}
+
+	candidate.CleanAndClassifyCandidate()
+	hash := candidate.NaturalKey()
+	if existing, ok := r.byHash[hash]; ok {
+		return OutcomeExistingMatch, existing, nil
+	}
+	return OutcomeConfidentNewMatch, nil, nil
 }
 
 func (r *MockRepository) RecordConflict(ctx context.Context, conflict *IdentityConflict) error {

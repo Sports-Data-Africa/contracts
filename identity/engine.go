@@ -169,3 +169,125 @@ func (e *Engine) GetCanonicalFixture(ctx context.Context, canonicalID string) (*
 
 	return f, nil
 }
+
+// ResolveJITLiveEvent performs Grade-A in-play identity resolution for live events (including cold boots).
+// Hierarchy: L1 Local RAM -> L2 Redis -> L3 MySQL Alias -> Deterministic Natural Candidate Evaluation.
+// Guarantees:
+// 1. One canonical ID per real match.
+// 2. Dual providers attach to the same canonical ID.
+// 3. Ambiguous fixtures are quarantined (cannot be opened for betting).
+// 4. Atomic transaction prevents race conditions and duplicate creation under concurrency.
+func (e *Engine) ResolveJITLiveEvent(
+	ctx context.Context,
+	candidate canonical.NaturalCandidate,
+	provider, providerFixtureID string,
+	source string,
+) (*CanonicalFixture, *FixtureAlias, error) {
+	if provider == "" || providerFixtureID == "" {
+		return nil, nil, errors.New("provider and providerFixtureID are required")
+	}
+
+	// 1. Hot path: check L1/L2/L3 alias mapping
+	cid, err := e.ResolveCanonicalID(ctx, provider, providerFixtureID)
+	if err == nil && cid != "" {
+		f, fErr := e.GetCanonicalFixture(ctx, cid)
+		if fErr != nil {
+			return nil, nil, fErr
+		}
+		// Return alias from repo/cache
+		alias, aErr := e.repo.GetAlias(ctx, provider, providerFixtureID)
+		if aErr != nil {
+			return f, nil, nil
+		}
+		return f, alias, nil
+	}
+
+	// 2. Evaluate candidate attributes
+	candidate.CleanAndClassifyCandidate()
+	outcome, existingFixture, rErr := e.repo.ResolveCandidate(ctx, candidate)
+	if rErr != nil {
+		return nil, nil, fmt.Errorf("resolve candidate: %w", rErr)
+	}
+
+	switch outcome {
+	case OutcomeAmbiguous:
+		// Settleability & Identity Invariant: Ambiguous fixtures are quarantined immediately
+		return nil, nil, ErrAmbiguousFixture
+
+	case OutcomeExistingMatch:
+		// Natural candidate matched an existing canonical fixture
+		if existingFixture == nil {
+			return nil, nil, errors.New("existing fixture match returned nil fixture")
+		}
+		alias, aErr := e.repo.AttachAlias(ctx, existingFixture.CanonicalFixtureID, provider, providerFixtureID, canonical.MappingAutomatic, source)
+		if aErr != nil {
+			return nil, nil, fmt.Errorf("attach alias to existing fixture: %w", aErr)
+		}
+		if e.cache != nil {
+			e.cache.PutAlias(ctx, provider, providerFixtureID, existingFixture.CanonicalFixtureID)
+			e.cache.PutFixture(ctx, existingFixture)
+		}
+		return existingFixture, alias, nil
+
+	case OutcomeConfidentNewMatch:
+		// Confident new match: execute atomic transaction to create canonical fixture and attach alias
+		f, alias, cErr := e.repo.CreateJITCanonicalFixtureTx(ctx, candidate, provider, providerFixtureID, canonical.MappingAutomatic, source)
+		if cErr != nil {
+			return nil, nil, fmt.Errorf("create jit canonical fixture tx: %w", cErr)
+		}
+		if e.cache != nil && f != nil {
+			e.cache.PutAlias(ctx, provider, providerFixtureID, f.CanonicalFixtureID)
+			e.cache.PutFixture(ctx, f)
+		}
+		return f, alias, nil
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported resolution outcome: %s", outcome)
+	}
+}
+
+// EvaluateSettleability checks whether a canonical fixture meets the Grade-A Settleability Gate.
+// If Settleable: returns true, BettingStateBettable.
+// If Not Settleable: returns false, BettingStateLiveBroadcastOnly.
+func (e *Engine) EvaluateSettleability(ctx context.Context, canonicalID string) (bool, canonical.BettingState, error) {
+	if canonicalID == "" {
+		return false, canonical.BettingSuspended, errors.New("canonicalID is required")
+	}
+
+	f, err := e.GetCanonicalFixture(ctx, canonicalID)
+	if err != nil {
+		return false, canonical.BettingSuspended, err
+	}
+
+	if f == nil {
+		return false, canonical.BettingSuspended, ErrFixtureNotFound
+	}
+
+	// 1. Quarantined check
+	if f.IdentityState == canonical.IdentityQuarantined {
+		return false, canonical.BettingLiveBroadcastOnly, nil
+	}
+
+	// 2. Settleability gate: Must have SettlementCapable = true and a valid ResultResolutionKey
+	if !f.SettlementCapable || f.ResultResolutionKey == "" {
+		return false, canonical.BettingLiveBroadcastOnly, nil
+	}
+
+	// 3. Must have at least one active alias with a valid result resolution path
+	aliases, err := e.repo.GetAliasesForCanonical(ctx, canonicalID)
+	if err == nil && len(aliases) > 0 {
+		hasActivePath := false
+		for _, a := range aliases {
+			if a.IsActive && a.ResultResolutionPath != "" {
+				hasActivePath = true
+				break
+			}
+		}
+		if !hasActivePath {
+			return false, canonical.BettingLiveBroadcastOnly, nil
+		}
+	}
+
+	return true, canonical.BettingBettable, nil
+}
+

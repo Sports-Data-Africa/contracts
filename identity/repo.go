@@ -127,7 +127,88 @@ func (r *SQLRepository) InitSchema(ctx context.Context) error {
 			return fmt.Errorf("init schema error: %w", err)
 		}
 	}
+
+	// Guarantee all projection & classification columns exist on pre-existing tables
+	cols := []struct {
+		table string
+		col   string
+		def   string
+	}{
+		{"canonical_fixtures", "competition_id", "BIGINT NOT NULL DEFAULT 0"},
+		{"canonical_fixtures", "competition_name", "VARCHAR(255) NOT NULL DEFAULT ''"},
+		{"canonical_fixtures", "gender", "VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN'"},
+		{"canonical_fixtures", "age_category", "VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN'"},
+		{"canonical_fixtures", "team_category", "VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN'"},
+		{"canonical_fixtures", "betting_state", "VARCHAR(32) NOT NULL DEFAULT 'OPEN'"},
+		{"canonical_fixtures", "settlement_state", "VARCHAR(32) NOT NULL DEFAULT 'PENDING'"},
+		{"canonical_fixtures", "settlement_capable", "TINYINT(1) NOT NULL DEFAULT 1"},
+		{"canonical_fixtures", "result_resolution_key", "VARCHAR(128) NOT NULL DEFAULT ''"},
+		{"fixture_aliases", "is_active", "TINYINT(1) NOT NULL DEFAULT 1"},
+		{"fixture_aliases", "result_resolution_path", "VARCHAR(255) NOT NULL DEFAULT ''"},
+	}
+
+	for _, c := range cols {
+		ensureTableColumn(ctx, r.db, c.table, c.col, c.def)
+	}
+
+	indexes := []struct {
+		table   string
+		idxName string
+		idxCols string
+	}{
+		{"canonical_fixtures", "idx_betting_state", "(betting_state)"},
+		{"fixture_aliases", "idx_is_active", "(is_active)"},
+	}
+
+	for _, idx := range indexes {
+		ensureTableIndex(ctx, r.db, idx.table, idx.idxName, idx.idxCols)
+	}
+
 	return nil
+}
+
+func ensureTableColumn(ctx context.Context, db *sql.DB, table, col, colDef string) {
+	if db == nil {
+		return
+	}
+	var count int
+	_ = db.QueryRowContext(ctx, `
+		SELECT COUNT(*) 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = ? 
+		  AND COLUMN_NAME = ?
+	`, table, col).Scan(&count)
+	if count == 0 {
+		alterSQL := fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN `%s` %s", table, col, colDef)
+		_, _ = db.ExecContext(ctx, alterSQL)
+	}
+}
+
+func ensureTableIndex(ctx context.Context, db *sql.DB, table, idxName, idxCols string) {
+	if db == nil {
+		return
+	}
+	var count int
+	_ = db.QueryRowContext(ctx, `
+		SELECT COUNT(*) 
+		FROM information_schema.STATISTICS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = ? 
+		  AND INDEX_NAME = ?
+	`, table, idxName).Scan(&count)
+	if count == 0 {
+		alterSQL := fmt.Sprintf("ALTER TABLE `%s` ADD INDEX `%s` %s", table, idxName, idxCols)
+		_, _ = db.ExecContext(ctx, alterSQL)
+	}
+}
+
+func isUnknownColumnError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Error 1054") || strings.Contains(msg, "Unknown column")
 }
 
 func (r *SQLRepository) GetCanonicalFixture(ctx context.Context, canonicalID string) (*CanonicalFixture, error) {
@@ -324,8 +405,12 @@ func (r *SQLRepository) GetOrCreateCanonicalFixture(ctx context.Context, sportID
 		now, now,
 	)
 	if err != nil {
-		// Race condition handling: if another concurrent worker inserted same hash
 		_ = tx.Rollback()
+		if isUnknownColumnError(err) {
+			_ = r.InitSchema(ctx)
+			return r.GetOrCreateCanonicalFixture(ctx, sportID, homeTeam, awayTeam, startTime, compID, compName)
+		}
+		// Race condition handling: if another concurrent worker inserted same hash
 		if existingRace, rErr := r.GetCanonicalFixtureByNaturalHash(ctx, hash); rErr == nil && existingRace != nil {
 			return existingRace, nil
 		}
@@ -500,6 +585,10 @@ func (r *SQLRepository) CreateJITCanonicalFixtureTx(
 	)
 	if err != nil {
 		_ = tx.Rollback()
+		if isUnknownColumnError(err) {
+			_ = r.InitSchema(ctx)
+			return r.CreateJITCanonicalFixtureTx(ctx, candidate, provider, providerFixtureID, mappingType, source)
+		}
 		// Handle concurrent race
 		if existingRace, rErr := r.GetCanonicalFixtureByNaturalHash(ctx, hash); rErr == nil && existingRace != nil {
 			a, aErr := r.AttachAlias(ctx, existingRace.CanonicalFixtureID, provider, providerFixtureID, mappingType, source)
@@ -526,6 +615,10 @@ func (r *SQLRepository) CreateJITCanonicalFixtureTx(
 	)
 	if err != nil {
 		_ = tx.Rollback()
+		if isUnknownColumnError(err) {
+			_ = r.InitSchema(ctx)
+			return r.CreateJITCanonicalFixtureTx(ctx, candidate, provider, providerFixtureID, mappingType, source)
+		}
 		return nil, nil, fmt.Errorf("insert jit provider alias: %w", err)
 	}
 
@@ -706,6 +799,10 @@ func (r *SQLRepository) AttachAlias(ctx context.Context, canonicalID, provider, 
 		now, now, now, now,
 	)
 	if err != nil {
+		if isUnknownColumnError(err) {
+			_ = r.InitSchema(ctx)
+			return r.AttachAlias(ctx, canonicalID, provider, providerFixtureID, mappingType, source)
+		}
 		// Check if another worker inserted it concurrently
 		if existingConcurrent, cErr := r.GetAlias(ctx, provider, providerFixtureID); cErr == nil && existingConcurrent != nil {
 			if existingConcurrent.CanonicalFixtureID == canonicalID {

@@ -132,6 +132,41 @@ const (
 	MappingAutomatic MappingType = "AUTOMATIC"
 )
 
+// Canonical Market Codes
+const (
+	MarketCode1X2              = "1X2"
+	MarketCodeOverUnder        = "OVER_UNDER"
+	MarketCodeHandicap         = "HANDICAP"
+	MarketCodeBothTeamsToScore = "BOTH_TEAMS_TO_SCORE"
+	MarketCodeDoubleChance     = "DOUBLE_CHANCE"
+	MarketCodeHalfTime1X2      = "HALF_TIME_1X2"
+	MarketCodeDrawNoBet        = "DRAW_NO_BET"
+	MarketCodeMoneyline        = "MONEYLINE"
+	MarketCodeSpread           = "SPREAD"
+	MarketCodeTotalPoints      = "TOTAL_POINTS"
+	MarketCodeMatchWinner      = "MATCH_WINNER"
+	MarketCodeSetWinner        = "SET_WINNER"
+	MarketCodeTotalGames       = "TOTAL_GAMES"
+	MarketCodeFightWinner      = "FIGHT_WINNER"
+	MarketCodeTotalRounds      = "TOTAL_ROUNDS"
+	MarketCodeMethodOfVictory  = "METHOD_OF_VICTORY"
+	MarketCodeRunsOverUnder    = "RUNS_OVER_UNDER"
+)
+
+// Canonical Selection Codes
+const (
+	SelectionCodeHome  = "HOME"
+	SelectionCodeDraw  = "DRAW"
+	SelectionCodeAway  = "AWAY"
+	SelectionCodeOver  = "OVER"
+	SelectionCodeUnder = "UNDER"
+	SelectionCodeYes   = "YES"
+	SelectionCodeNo    = "NO"
+	SelectionCode1X    = "1X"
+	SelectionCode12    = "12"
+	SelectionCodeX2    = "X2"
+)
+
 // FormatCanonicalFixtureID creates a standardized platform canonical fixture ID: SPD-[SPORT]-[6DIGIT].
 // The sequence is an opaque, platform-generated identifier formatted with 6 digits (padded with leading zeros if < 100000).
 func FormatCanonicalFixtureID(sportID int, sequence int64) (string, error) {

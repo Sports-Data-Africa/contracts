@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "github.com/Sports-Data-Africa/contracts/auth/v1;authv1";
+
+// AuthService defines the authoritative internal security and entitlement validation service.
+service AuthService {
+  // ValidateAPIKey authorizes machine API keys, verifying client status, scopes, and sport permissions.
+  rpc ValidateAPIKey (ValidateAPIKeyRequest) returns (ValidateAPIKeyResponse);
+
+  // ValidateWSToken verifies short-lived tokens for WebSocket feed streaming.
+  rpc ValidateWSToken (ValidateWSTokenRequest) returns (ValidateWSTokenResponse);
+
+  // GetClientEntitlements fetches the full entitlement and rate limiting configuration for a client.
+  rpc GetClientEntitlements (GetClientEntitlementsRequest) returns (GetClientEntitlementsResponse);
+
+  // CheckClientStatus returns the current onboarding and operational lifecycle state of a client.
+  rpc CheckClientStatus (CheckClientStatusRequest) returns (CheckClientStatusResponse);
+}
+
+message ValidateAPIKeyRequest {
+  string raw_api_key = 1;
+  string required_scope = 2;
+  int32 sport_id = 3;
+}
+
+message ValidateAPIKeyResponse {
+  bool valid = 1;
+  string client_id = 2;
+  string client_name = 3;
+  string plan = 4;
+  string environment = 5;
+  repeated string scopes = 6;
+  repeated int32 allowed_sports = 7;
+  string key_id = 8;
+  int64 expires_at_unix = 9;
+  string error_message = 10;
+  string error_code = 11;
+}
+
+message ValidateWSTokenRequest {
+  string token = 1;
+}
+
+message ValidateWSTokenResponse {
+  bool valid = 1;
+  string client_id = 2;
+  string client_name = 3;
+  string plan = 4;
+  string environment = 5;
+  repeated string scopes = 6;
+  repeated int32 allowed_sports = 7;
+  string key_id = 8;
+  int64 expires_at_unix = 9;
+  string error_message = 10;
+  string error_code = 11;
+}
+
+message GetClientEntitlementsRequest {
+  string client_id = 1;
+}
+
+message GetClientEntitlementsResponse {
+  string client_id = 1;
+  string status = 2;
+  string plan = 3;
+  repeated string scopes = 4;
+  repeated int32 allowed_sports = 5;
+  int32 rate_limit_rpm = 6;
+  repeated string ip_allowlist = 7;
+}
+
+message CheckClientStatusRequest {
+  string client_id = 1;
+}
+
+message CheckClientStatusResponse {
+  string client_id = 1;
+  string status = 2;
+  bool is_active = 3;
+  bool is_suspended = 4;
+  string message = 5;
+}

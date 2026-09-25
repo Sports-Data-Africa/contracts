@@ -117,14 +117,19 @@ type CacheEntry struct {
 	ExpiresAt time.Time
 }
 
-// L1Cache provides a high-performance in-memory cache for API key validation results.
+// L1Cache provides a bounded, high-performance in-memory cache for API key validation results.
+// Maximum capacity is 50,000 entries. On overflow, expired entries are evicted first;
+// if still over capacity, a random sample of entries is evicted (prevents unbounded heap growth).
 type L1Cache struct {
-	mu      sync.RWMutex
-	entries map[string]CacheEntry // key: sha256(raw_key) or token string
-	ttl     time.Duration
+	mu       sync.RWMutex
+	entries  map[string]CacheEntry // key: sha256(raw_key) or token string
+	ttl      time.Duration
+	maxSize  int
 }
 
-// NewL1Cache initializes an L1 in-memory auth cache with the specified TTL.
+const defaultL1MaxSize = 50_000
+
+// NewL1Cache initializes a bounded L1 in-memory auth cache with the specified TTL.
 func NewL1Cache(ttl time.Duration) *L1Cache {
 	if ttl <= 0 {
 		ttl = 60 * time.Second
@@ -132,6 +137,7 @@ func NewL1Cache(ttl time.Duration) *L1Cache {
 	return &L1Cache{
 		entries: make(map[string]CacheEntry),
 		ttl:     ttl,
+		maxSize: defaultL1MaxSize,
 	}
 }
 
@@ -153,14 +159,40 @@ func (c *L1Cache) Get(keyHash string) (*ClientAuthContext, bool) {
 	return entry.Context, true
 }
 
-// Set stores a ClientAuthContext in the cache.
+// Set stores a ClientAuthContext in the cache, enforcing the capacity bound.
 func (c *L1Cache) Set(keyHash string, ctx *ClientAuthContext) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// If already at capacity, evict expired entries first, then random entries
+	if len(c.entries) >= c.maxSize {
+		now := time.Now()
+		for k, v := range c.entries {
+			if now.After(v.ExpiresAt) {
+				delete(c.entries, k)
+			}
+			// Limit eviction loop to avoid long lock holds
+			if len(c.entries) < c.maxSize {
+				break
+			}
+		}
+		// If still at capacity after expiry eviction, evict a random batch
+		if len(c.entries) >= c.maxSize {
+			evicted := 0
+			for k := range c.entries {
+				delete(c.entries, k)
+				evicted++
+				if evicted >= 500 {
+					break
+				}
+			}
+		}
+	}
+
 	c.entries[keyHash] = CacheEntry{
 		Context:   ctx,
 		ExpiresAt: time.Now().Add(c.ttl),
 	}
-	c.mu.Unlock()
 }
 
 // Invalidate removes entries for a specific keyHash or clientID.
@@ -185,4 +217,11 @@ func (c *L1Cache) Clear() {
 	c.mu.Lock()
 	c.entries = make(map[string]CacheEntry)
 	c.mu.Unlock()
+}
+
+// Size returns the current number of cache entries.
+func (c *L1Cache) Size() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.entries)
 }

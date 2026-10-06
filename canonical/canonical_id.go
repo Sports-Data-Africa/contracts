@@ -61,13 +61,15 @@ var SportCodeToID = map[string]int{
 	SportCodeTennis:      SportIDTennis,
 	SportCodeVolleyball:  SportIDVolleyball,
 	SportCodeRugby:       SportIDRugby,
+	"RG":                 SportIDRugby, // Compatible alias
 	SportCodeMMA:         SportIDMMA,
 	SportCodeCricket:     SportIDCricket,
+	"CR":                 SportIDCricket, // Compatible alias
 	SportCodeTableTennis: SportIDTableTennis,
 }
 
 // Canonical ID Regex: SPD-[SPORT]-[6DIGIT]
-var CanonicalIDRegex = regexp.MustCompile(`^SPD-(FB|IH|BB|TN|VB|RB|MM|CK|TT)-([0-9]{6})$`)
+var CanonicalIDRegex = regexp.MustCompile(`^SPD-(FB|IH|BB|TN|VB|RB|MM|CK|TT|CR|RG)-([0-9]{6})$`)
 
 // Identity States
 type IdentityState string

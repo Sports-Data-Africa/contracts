@@ -169,18 +169,18 @@ var sportAliases = map[string]int{
 	"basketball": SportIDBasketball, "bb": SportIDBasketball,
 	"tennis": SportIDTennis, "tn": SportIDTennis,
 	"ice-hockey": SportIDIceHockey, "ice_hockey": SportIDIceHockey, "icehockey": SportIDIceHockey,
-	"hockey": SportIDIceHockey, "ih": SportIDIceHockey,
+	"hockey": SportIDIceHockey, "ice hockey": SportIDIceHockey, "ih": SportIDIceHockey,
 	"volleyball": SportIDVolleyball, "vb": SportIDVolleyball,
 	"mma": SportIDMMA, "boxing": SportIDMMA, "combat": SportIDMMA, "ufc": SportIDMMA,
 	"mm": SportIDMMA, "bx": SportIDMMA,
 	"rugby": SportIDRugby, "rb": SportIDRugby, "rg": SportIDRugby,
 	"cricket": SportIDCricket, "ck": SportIDCricket, "cr": SportIDCricket,
 	"american-football": SportIDAmericanFootball, "american_football": SportIDAmericanFootball,
-	"americanfootball": SportIDAmericanFootball, "af": SportIDAmericanFootball,
+	"americanfootball": SportIDAmericanFootball, "american football": SportIDAmericanFootball, "af": SportIDAmericanFootball,
 	"handball": SportIDHandball, "hb": SportIDHandball,
 	"baseball": SportIDBaseball, "bs": SportIDBaseball,
 	"table-tennis": SportIDTableTennis, "table_tennis": SportIDTableTennis,
-	"tabletennis": SportIDTableTennis, "tt": SportIDTableTennis, "ping-pong": SportIDTableTennis,
+	"tabletennis": SportIDTableTennis, "table tennis": SportIDTableTennis, "tt": SportIDTableTennis, "ping-pong": SportIDTableTennis, "ping pong": SportIDTableTennis,
 }
 
 // NormalizeSportIDStrict maps any provider string, slug, Sportradar URN or numeric ID to the

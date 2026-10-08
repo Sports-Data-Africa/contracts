@@ -890,6 +890,9 @@ func (r *SQLRepository) GetAliasesForCanonical(ctx context.Context, canonicalID 
 		a.MetadataJSON = meta
 		aliases = append(aliases, a)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return aliases, nil
 }
 

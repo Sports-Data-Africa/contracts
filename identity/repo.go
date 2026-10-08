@@ -134,11 +134,20 @@ func (r *SQLRepository) InitSchema(ctx context.Context) error {
 		col   string
 		def   string
 	}{
+		{"canonical_fixtures", "sequence_number", "BIGINT NOT NULL DEFAULT 0"},
+		{"canonical_fixtures", "sport_code", "VARCHAR(8) NOT NULL DEFAULT ''"},
+		{"canonical_fixtures", "home_team", "VARCHAR(255) NOT NULL DEFAULT ''"},
+		{"canonical_fixtures", "away_team", "VARCHAR(255) NOT NULL DEFAULT ''"},
+		{"canonical_fixtures", "scheduled_start", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"},
 		{"canonical_fixtures", "competition_id", "BIGINT NOT NULL DEFAULT 0"},
 		{"canonical_fixtures", "competition_name", "VARCHAR(255) NOT NULL DEFAULT ''"},
 		{"canonical_fixtures", "gender", "VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN'"},
 		{"canonical_fixtures", "age_category", "VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN'"},
 		{"canonical_fixtures", "team_category", "VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN'"},
+		{"canonical_fixtures", "natural_identity_hash", "VARCHAR(64) NOT NULL DEFAULT ''"},
+		{"canonical_fixtures", "identity_state", "VARCHAR(32) NOT NULL DEFAULT 'IDENTIFIED'"},
+		{"canonical_fixtures", "verification_state", "VARCHAR(32) NOT NULL DEFAULT 'PENDING'"},
+		{"canonical_fixtures", "fixture_state", "VARCHAR(32) NOT NULL DEFAULT 'NOT_STARTED'"},
 		{"canonical_fixtures", "betting_state", "VARCHAR(32) NOT NULL DEFAULT 'OPEN'"},
 		{"canonical_fixtures", "settlement_state", "VARCHAR(32) NOT NULL DEFAULT 'PENDING'"},
 		{"canonical_fixtures", "settlement_capable", "TINYINT(1) NOT NULL DEFAULT 1"},
@@ -151,12 +160,26 @@ func (r *SQLRepository) InitSchema(ctx context.Context) error {
 		ensureTableColumn(ctx, r.db, c.table, c.col, c.def)
 	}
 
+	// Ensure canonical_fixture_id is VARCHAR(64) on legacy tables
+	var dataType string
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT DATA_TYPE 
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = DATABASE() 
+		  AND TABLE_NAME = 'canonical_fixtures' 
+		  AND COLUMN_NAME = 'canonical_fixture_id'
+	`).Scan(&dataType)
+	if dataType != "" && !strings.Contains(strings.ToLower(dataType), "char") {
+		_, _ = r.db.ExecContext(ctx, "ALTER TABLE canonical_fixtures MODIFY COLUMN canonical_fixture_id VARCHAR(64) NOT NULL")
+	}
+
 	indexes := []struct {
 		table   string
 		idxName string
 		idxCols string
 	}{
 		{"canonical_fixtures", "idx_betting_state", "(betting_state)"},
+		{"canonical_fixtures", "idx_natural_hash", "(natural_identity_hash)"},
 		{"fixture_aliases", "idx_is_active", "(is_active)"},
 	}
 
@@ -294,6 +317,10 @@ func (r *SQLRepository) GetCanonicalFixtureByNaturalHash(ctx context.Context, ha
 }
 
 func (r *SQLRepository) GetOrCreateCanonicalFixture(ctx context.Context, sportID int, homeTeam, awayTeam string, startTime time.Time, compID int64, compName string) (*CanonicalFixture, error) {
+	return r.getOrCreateCanonicalFixtureHelper(ctx, sportID, homeTeam, awayTeam, startTime, compID, compName, true)
+}
+
+func (r *SQLRepository) getOrCreateCanonicalFixtureHelper(ctx context.Context, sportID int, homeTeam, awayTeam string, startTime time.Time, compID int64, compName string, allowRetry bool) (*CanonicalFixture, error) {
 	if strings.TrimSpace(homeTeam) == "" || strings.TrimSpace(awayTeam) == "" {
 		return nil, errors.New("home_team and away_team are required")
 	}
@@ -406,9 +433,9 @@ func (r *SQLRepository) GetOrCreateCanonicalFixture(ctx context.Context, sportID
 	)
 	if err != nil {
 		_ = tx.Rollback()
-		if isUnknownColumnError(err) {
+		if isUnknownColumnError(err) && allowRetry {
 			_ = r.InitSchema(ctx)
-			return r.GetOrCreateCanonicalFixture(ctx, sportID, homeTeam, awayTeam, startTime, compID, compName)
+			return r.getOrCreateCanonicalFixtureHelper(ctx, sportID, homeTeam, awayTeam, startTime, compID, compName, false)
 		}
 		// Race condition handling: if another concurrent worker inserted same hash
 		if existingRace, rErr := r.GetCanonicalFixtureByNaturalHash(ctx, hash); rErr == nil && existingRace != nil {

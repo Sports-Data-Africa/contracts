@@ -72,3 +72,18 @@ type InternalResultCertifiedEvent struct {
 	// STRICTLY INTERNAL AUDIT TRAIL: Never leak to clients
 	VerificationSources []string `json:"verification_sources"` // ["AISCORE", "FLASHSCORE"]
 }
+
+// ClientEntitlementsChangedEvent is published when an operator updates a client's feed access.
+// Consumed idempotently by prematch-service and live-service to enforce sports and leagues.
+type ClientEntitlementsChangedEvent struct {
+	EventID            string          `json:"event_id"`
+	ClientID           string          `json:"client_id"`
+	EntitlementVersion int64           `json:"entitlement_version"`
+	PrematchEnabled    bool            `json:"prematch_enabled"`
+	LiveEnabled        bool            `json:"live_enabled"`
+	BettingEnabled     bool            `json:"betting_enabled"`
+	Sports             []int           `json:"sports"`
+	LeaguePolicies     map[int]string  `json:"league_policies"` // sport_id -> "ALL" | "SELECTED" | "NONE"
+	AllowedLeagues     map[int][]int64 `json:"allowed_leagues"` // sport_id -> []competition_id
+	OccurredAt         time.Time       `json:"occurred_at"`
+}

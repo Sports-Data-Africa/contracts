@@ -623,7 +623,7 @@ var teamSynonyms = map[string]string{
 // Tokens dropped wherever they appear.
 var noiseAnywhere = map[string]bool{
 	"fc": true, "cf": true, "sc": true, "fk": true, "afc": true,
-	"club": true, "the": true, "de": true, "da": true, "del": true,
+	"club": true, "football": true, "the": true, "de": true, "da": true, "del": true,
 }
 
 // Tokens dropped only when leading or trailing (so "AS Roma" == "Roma" but a middle "as" stays).

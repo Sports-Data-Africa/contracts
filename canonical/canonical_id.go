@@ -539,6 +539,24 @@ func ValidateCanonicalFixtureID(canonicalID string) error {
 	return nil
 }
 
+// FormatCanonicalNumericFixtureID creates the platform's standardized 8-digit numeric fixture ID:
+// (sportID * 10,000,000) + sequenceNumber.
+// E.g., Football (sportID=1) with sequence 100186 becomes 10100186.
+func FormatCanonicalNumericFixtureID(sportID int, sequence int64) int64 {
+	if sportID > 0 {
+		return int64(sportID)*10000000 + sequence
+	}
+	return sequence
+}
+
+// ParseCanonicalNumericFixtureID extracts the sport ID and sequence number from an 8-digit fixture ID.
+func ParseCanonicalNumericFixtureID(fixtureID int64) (int, int64) {
+	if fixtureID >= 10000000 {
+		return int(fixtureID / 10000000), fixtureID % 10000000
+	}
+	return 1, fixtureID
+}
+
 // NormalizeCanonicalFixtureID upper-cases, trims and rewrites legacy sport codes
 // (CR -> CK, RG -> RB) to canonical form, then validates. Use it at system boundaries
 // (APIs, event consumers) to bridge IDs produced by older services.
@@ -611,6 +629,7 @@ var noiseAnywhere = map[string]bool{
 // Tokens dropped only when leading or trailing (so "AS Roma" == "Roma" but a middle "as" stays).
 var noiseAtEdge = map[string]bool{
 	"as": true, "ac": true, "cd": true, "olympique": true,
+	"csd": true, "sv": true, "sk": true, "bk": true, "if": true, "tsv": true,
 }
 
 // tokenize lower-cases, folds accents, strips punctuation and splits on whitespace.
@@ -647,10 +666,7 @@ func NormalizeTeamName(team string) string {
 	return strings.Join(filtered, " ")
 }
 
-// ---------------------------------------------------------------------------
 // Candidate classification
-// ---------------------------------------------------------------------------
-
 var (
 	womenRe       = regexp.MustCompile(`\b(women|womens|ladies|female|feminine|femenino|femminile|feminin)\b|\(w\)`)
 	ageRe         = regexp.MustCompile(`\bu[- ]?(17|18|19|20|21|23)\b`)

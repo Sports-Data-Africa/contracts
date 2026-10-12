@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Sports-Data-Africa/contracts/canonical"
@@ -87,6 +88,8 @@ func (e *Engine) ResolveOrCreateFixture(
 	mappingType canonical.MappingType,
 	source string,
 ) (*CanonicalFixture, error) {
+	provider = strings.TrimSpace(provider)
+	providerFixtureID = strings.TrimSpace(providerFixtureID)
 	if provider == "" || providerFixtureID == "" {
 		return nil, errors.New("provider and providerFixtureID are required")
 	}
@@ -127,6 +130,8 @@ func (e *Engine) AttachAlias(
 	mappingType canonical.MappingType,
 	source string,
 ) (*FixtureAlias, error) {
+	provider = strings.TrimSpace(provider)
+	providerFixtureID = strings.TrimSpace(providerFixtureID)
 	if err := canonical.ValidateCanonicalFixtureID(canonicalID); err != nil {
 		return nil, err
 	}
@@ -183,6 +188,8 @@ func (e *Engine) ResolveJITLiveEvent(
 	provider, providerFixtureID string,
 	source string,
 ) (*CanonicalFixture, *FixtureAlias, error) {
+	provider = strings.TrimSpace(provider)
+	providerFixtureID = strings.TrimSpace(providerFixtureID)
 	if provider == "" || providerFixtureID == "" {
 		return nil, nil, errors.New("provider and providerFixtureID are required")
 	}
@@ -290,4 +297,3 @@ func (e *Engine) EvaluateSettleability(ctx context.Context, canonicalID string) 
 
 	return true, canonical.BettingBettable, nil
 }
-

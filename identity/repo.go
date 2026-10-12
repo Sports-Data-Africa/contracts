@@ -339,10 +339,30 @@ func (r *SQLRepository) getOrCreateCanonicalFixtureHelper(ctx context.Context, s
 	candidate.CleanAndClassifyCandidate()
 	hash := candidate.NaturalKey()
 
-	// Check if fixture already exists
-	existing, err := r.GetCanonicalFixtureByNaturalHash(ctx, hash)
-	if err == nil && existing != nil {
-		return existing, nil
+	// 1. Check all candidate buckets for this match
+	for _, h := range candidate.NaturalKeyCandidates() {
+		existing, err := r.GetCanonicalFixtureByNaturalHash(ctx, h)
+		if err == nil && existing != nil {
+			return existing, nil
+		}
+	}
+
+	// 2. Check reversed home/away orientation
+	revCandidate := candidate
+	revCandidate.HomeTeam, revCandidate.AwayTeam = candidate.AwayTeam, candidate.HomeTeam
+	revCandidate.CleanAndClassifyCandidate()
+	for _, h := range revCandidate.NaturalKeyCandidates() {
+		existing, err := r.GetCanonicalFixtureByNaturalHash(ctx, h)
+		if err == nil && existing != nil {
+			return existing, nil
+		}
+	}
+
+	// 3. Check team similarity against existing canonical fixtures
+	if r.db != nil {
+		if simFix, _, simErr := r.findCandidateBySimilarity(ctx, candidate); simErr == nil && simFix != nil {
+			return simFix, nil
+		}
 	}
 
 	if r.db == nil {
@@ -695,6 +715,111 @@ func (r *SQLRepository) CreateJITCanonicalFixtureTx(
 	return f, a, nil
 }
 
+func teamTokens(s string) map[string]bool {
+	tokens := make(map[string]bool)
+	for _, w := range strings.Fields(canonical.NormalizeTeamName(s)) {
+		if len(w) > 1 {
+			tokens[w] = true
+		}
+	}
+	return tokens
+}
+
+func tokenJaccard(tokensA, tokensB map[string]bool) float64 {
+	if len(tokensA) == 0 || len(tokensB) == 0 {
+		return 0
+	}
+	intersection := 0
+	for t := range tokensA {
+		if tokensB[t] {
+			intersection++
+		}
+	}
+	union := len(tokensA) + len(tokensB) - intersection
+	if union == 0 {
+		return 0
+	}
+	return float64(intersection) / float64(union)
+}
+
+func (r *SQLRepository) findCandidateBySimilarity(ctx context.Context, candidate canonical.NaturalCandidate) (*CanonicalFixture, bool, error) {
+	if r.db == nil || candidate.ScheduledStart.IsZero() {
+		return nil, false, nil
+	}
+	startTime := candidate.ScheduledStart.UTC()
+	windowStart := startTime.Add(-2 * time.Hour)
+	windowEnd := startTime.Add(2 * time.Hour)
+
+	query := `
+		SELECT id, canonical_fixture_id, sequence_number, sport_id, sport_code,
+		       home_team, away_team, scheduled_start, competition_id, competition_name,
+		       gender, age_category, team_category,
+		       natural_identity_hash, identity_state, verification_state, fixture_state,
+		       betting_state, settlement_state, settlement_capable, result_resolution_key,
+		       created_at, updated_at
+		FROM canonical_fixtures
+		WHERE sport_id = ? AND scheduled_start >= ? AND scheduled_start <= ?
+	`
+	rows, err := r.db.QueryContext(ctx, query, candidate.SportID, windowStart, windowEnd)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+
+	candHomeTok := teamTokens(candidate.HomeTeam)
+	candAwayTok := teamTokens(candidate.AwayTeam)
+
+	var matches []*CanonicalFixture
+	for rows.Next() {
+		var f CanonicalFixture
+		var idState, verState, fixState, betState, setState string
+		var setCapable bool
+		if scanErr := rows.Scan(
+			&f.ID, &f.CanonicalFixtureID, &f.SequenceNumber, &f.SportID, &f.SportCode,
+			&f.HomeTeam, &f.AwayTeam, &f.ScheduledStart, &f.CompetitionID, &f.CompetitionName,
+			&f.Gender, &f.AgeCategory, &f.TeamCategory,
+			&f.NaturalIdentityHash, &idState, &verState, &fixState,
+			&betState, &setState, &setCapable, &f.ResultResolutionKey,
+			&f.CreatedAt, &f.UpdatedAt,
+		); scanErr != nil {
+			continue
+		}
+		f.IdentityState = canonical.IdentityState(idState)
+		f.VerificationState = canonical.VerificationState(verState)
+		f.FixtureState = canonical.FixtureLifecycleState(fixState)
+		f.BettingState = canonical.BettingState(betState)
+		f.SettlementState = canonical.SettlementLifecycleState(setState)
+		f.SettlementCapable = setCapable
+
+		dbHomeTok := teamTokens(f.HomeTeam)
+		dbAwayTok := teamTokens(f.AwayTeam)
+
+		hSim := tokenJaccard(candHomeTok, dbHomeTok)
+		aSim := tokenJaccard(candAwayTok, dbAwayTok)
+
+		revHSim := tokenJaccard(candHomeTok, dbAwayTok)
+		revASim := tokenJaccard(candAwayTok, dbHomeTok)
+
+		isDirectMatch := (hSim >= 0.70 && aSim >= 0.70) || ((hSim+aSim)/2.0 >= 0.85)
+		isRevMatch := (revHSim >= 0.70 && revASim >= 0.70) || ((revHSim+revASim)/2.0 >= 0.85)
+
+		if isDirectMatch || isRevMatch {
+			matches = append(matches, &f)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+
+	if len(matches) == 1 {
+		return matches[0], false, nil
+	}
+	if len(matches) > 1 {
+		return nil, true, nil
+	}
+	return nil, false, nil
+}
+
 // ResolveCandidate evaluates an incoming candidate fixture across deterministic identity attributes.
 // It returns OutcomeExistingMatch, OutcomeConfidentNewMatch, or OutcomeAmbiguous.
 func (r *SQLRepository) ResolveCandidate(ctx context.Context, candidate canonical.NaturalCandidate) (ResolutionOutcome, *CanonicalFixture, error) {
@@ -716,15 +841,41 @@ func (r *SQLRepository) ResolveCandidate(ctx context.Context, candidate canonica
 	}
 
 	candidate.CleanAndClassifyCandidate()
-	hash := candidate.NaturalKey()
 
-	// 1. Check if natural candidate matches an existing canonical fixture
-	existing, err := r.GetCanonicalFixtureByNaturalHash(ctx, hash)
-	if err == nil && existing != nil {
-		return OutcomeExistingMatch, existing, nil
+	// 1. Check all candidate buckets (current, -30m, +30m)
+	for _, h := range candidate.NaturalKeyCandidates() {
+		existing, err := r.GetCanonicalFixtureByNaturalHash(ctx, h)
+		if err == nil && existing != nil {
+			return OutcomeExistingMatch, existing, nil
+		}
 	}
 
-	// 2. Legitimate, confident new match
+	// 2. Check reversed home/away orientation
+	revCandidate := candidate
+	revCandidate.HomeTeam, revCandidate.AwayTeam = candidate.AwayTeam, candidate.HomeTeam
+	revCandidate.CleanAndClassifyCandidate()
+	for _, h := range revCandidate.NaturalKeyCandidates() {
+		existing, err := r.GetCanonicalFixtureByNaturalHash(ctx, h)
+		if err == nil && existing != nil {
+			return OutcomeExistingMatch, existing, nil
+		}
+	}
+
+	// 3. Check similarity across existing fixtures within +/- 2h window
+	if r.db != nil {
+		matched, ambiguous, err := r.findCandidateBySimilarity(ctx, candidate)
+		if err != nil {
+			return OutcomeAmbiguous, nil, err
+		}
+		if ambiguous {
+			return OutcomeAmbiguous, nil, nil
+		}
+		if matched != nil {
+			return OutcomeExistingMatch, matched, nil
+		}
+	}
+
+	// 4. Legitimate, confident new match
 	return OutcomeConfidentNewMatch, nil, nil
 }
 
@@ -732,12 +883,15 @@ func (r *SQLRepository) GetAlias(ctx context.Context, provider, providerFixtureI
 	if r.db == nil {
 		return nil, ErrAliasNotFound
 	}
+	provider = strings.ToUpper(strings.TrimSpace(provider))
+	providerFixtureID = strings.TrimSpace(providerFixtureID)
+
 	query := `
 		SELECT id, canonical_fixture_id, provider, provider_fixture_id, mapping_type, source,
 		       is_active, result_resolution_path,
 		       first_seen_at, last_seen_at, COALESCE(metadata, '{}'), created_at, updated_at
 		FROM fixture_aliases
-		WHERE provider = ? AND provider_fixture_id = ?
+		WHERE UPPER(provider) = ? AND provider_fixture_id = ?
 		LIMIT 1
 	`
 	var a FixtureAlias
@@ -747,18 +901,58 @@ func (r *SQLRepository) GetAlias(ctx context.Context, provider, providerFixtureI
 		&a.IsActive, &a.ResultResolutionPath,
 		&a.FirstSeenAt, &a.LastSeenAt, &meta, &a.CreatedAt, &a.UpdatedAt,
 	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrAliasNotFound
+	if err == nil {
+		a.MappingType = canonical.MappingType(mapType)
+		a.MetadataJSON = meta
+		return &a, nil
 	}
-	if err != nil {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
-	a.MappingType = canonical.MappingType(mapType)
-	a.MetadataJSON = meta
-	return &a, nil
+
+	// Fallback bridge: check provider_fixture_mappings table
+	var pfmFixtureID int64
+	var pfmSportID int
+	pfmErr := r.db.QueryRowContext(ctx, `
+		SELECT fixture_id, sport_id FROM provider_fixture_mappings
+		WHERE UPPER(provider) = ? AND provider_fixture_id = ?
+		LIMIT 1
+	`, provider, providerFixtureID).Scan(&pfmFixtureID, &pfmSportID)
+	if pfmErr == nil && pfmFixtureID > 0 {
+		sportID, seq := canonical.ParseCanonicalNumericFixtureID(pfmFixtureID)
+		if pfmSportID > 0 {
+			sportID = pfmSportID
+		}
+		if cid, cErr := canonical.FormatCanonicalFixtureID(sportID, seq); cErr == nil {
+			now := time.Now().UTC()
+			_, _ = r.db.ExecContext(ctx, `
+				INSERT IGNORE INTO fixture_aliases (
+					canonical_fixture_id, provider, provider_fixture_id,
+					mapping_type, source, is_active, result_resolution_path,
+					first_seen_at, last_seen_at, metadata, created_at, updated_at
+				) VALUES (?, ?, ?, 'MIGRATION', 'pfm_bridge', 1, '', ?, ?, '{}', ?, ?)
+			`, cid, provider, providerFixtureID, now, now, now, now)
+			return &FixtureAlias{
+				CanonicalFixtureID: cid,
+				Provider:           provider,
+				ProviderFixtureID:  providerFixtureID,
+				MappingType:        canonical.MappingPrematch,
+				Source:             "pfm_bridge",
+				IsActive:           true,
+				FirstSeenAt:        now,
+				LastSeenAt:         now,
+				CreatedAt:          now,
+				UpdatedAt:          now,
+			}, nil
+		}
+	}
+
+	return nil, ErrAliasNotFound
 }
 
 func (r *SQLRepository) AttachAlias(ctx context.Context, canonicalID, provider, providerFixtureID string, mappingType canonical.MappingType, source string) (*FixtureAlias, error) {
+	provider = strings.ToUpper(strings.TrimSpace(provider))
+	providerFixtureID = strings.TrimSpace(providerFixtureID)
 	if canonicalID == "" || provider == "" || providerFixtureID == "" {
 		return nil, errors.New("canonicalID, provider, and providerFixtureID are required")
 	}
@@ -838,6 +1032,16 @@ func (r *SQLRepository) AttachAlias(ctx context.Context, canonicalID, provider, 
 			return nil, fmt.Errorf("%w: concurrent alias race on %s:%s", ErrIdentityConflict, provider, providerFixtureID)
 		}
 		return nil, fmt.Errorf("insert alias: %w", err)
+	}
+
+	// Bridge synchronization to provider_fixture_mappings table
+	if sportID, _, seq, parseErr := canonical.ParseCanonicalFixtureID(canonicalID); parseErr == nil && seq > 0 {
+		numericID := canonical.FormatCanonicalNumericFixtureID(sportID, seq)
+		_, _ = r.db.ExecContext(ctx, `
+			INSERT INTO provider_fixture_mappings (provider, provider_fixture_id, fixture_id, sport_id)
+			VALUES (?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE fixture_id = VALUES(fixture_id), sport_id = VALUES(sport_id)
+		`, provider, providerFixtureID, numericID, sportID)
 	}
 
 	id, _ := res.LastInsertId()

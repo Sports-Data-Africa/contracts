@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -29,19 +30,29 @@ func NewL1Cache() *L1Cache {
 	}
 }
 
+func makeAliasKey(provider, providerFixtureID string) string {
+	return fmt.Sprintf("%s:%s", strings.ToUpper(strings.TrimSpace(provider)), strings.TrimSpace(providerFixtureID))
+}
+
 func (c *L1Cache) GetCanonicalID(provider, providerFixtureID string) (string, bool) {
-	key := fmt.Sprintf("%s:%s", provider, providerFixtureID)
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	cid, ok := c.aliases[key]
+	if cid, ok := c.aliases[makeAliasKey(provider, providerFixtureID)]; ok {
+		return cid, ok
+	}
+	if cid, ok := c.aliases[fmt.Sprintf("%s:%s", provider, providerFixtureID)]; ok {
+		return cid, ok
+	}
+	cid, ok := c.aliases[fmt.Sprintf("%s:%s", strings.ToLower(provider), providerFixtureID)]
 	return cid, ok
 }
 
 func (c *L1Cache) SetAlias(provider, providerFixtureID, canonicalID string) {
-	key := fmt.Sprintf("%s:%s", provider, providerFixtureID)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.aliases[key] = canonicalID
+	c.aliases[makeAliasKey(provider, providerFixtureID)] = canonicalID
+	c.aliases[fmt.Sprintf("%s:%s", provider, providerFixtureID)] = canonicalID
+	c.aliases[fmt.Sprintf("%s:%s", strings.ToLower(provider), providerFixtureID)] = canonicalID
 }
 
 func (c *L1Cache) GetFixture(canonicalID string) (*CanonicalFixture, bool) {
@@ -102,9 +113,16 @@ func (tc *TieredIdentityCache) ResolveTiered(ctx context.Context, provider, prov
 		key := fmt.Sprintf("identity:alias:%s:%s", provider, providerFixtureID)
 		cid, err := tc.l2.Get(ctx, key)
 		if err == nil && cid != "" {
-			// Backfill L1
 			tc.l1.SetAlias(provider, providerFixtureID, cid)
 			return cid, true
+		}
+		upperProv := strings.ToUpper(provider)
+		if upperProv != provider {
+			upperKey := fmt.Sprintf("identity:alias:%s:%s", upperProv, providerFixtureID)
+			if cid, err := tc.l2.Get(ctx, upperKey); err == nil && cid != "" {
+				tc.l1.SetAlias(provider, providerFixtureID, cid)
+				return cid, true
+			}
 		}
 	}
 
@@ -137,12 +155,12 @@ func (tc *TieredIdentityCache) PutFixture(ctx context.Context, f *CanonicalFixtu
 
 // Invalidate removes an alias from L1 and L2.
 func (tc *TieredIdentityCache) Invalidate(ctx context.Context, provider, providerFixtureID string) {
-	key := fmt.Sprintf("%s:%s", provider, providerFixtureID)
+	key := makeAliasKey(provider, providerFixtureID)
 	tc.l1.mu.Lock()
 	delete(tc.l1.aliases, key)
 	tc.l1.mu.Unlock()
 
 	if tc.l2 != nil {
-		_ = tc.l2.Del(ctx, fmt.Sprintf("identity:alias:%s:%s", provider, providerFixtureID))
+		_ = tc.l2.Del(ctx, fmt.Sprintf("identity:alias:%s", key), fmt.Sprintf("identity:alias:%s:%s", provider, providerFixtureID))
 	}
 }

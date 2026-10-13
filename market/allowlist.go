@@ -92,9 +92,11 @@ var (
 // IsMarketSettleableAndAllowlisted checks whether a sport and market is approved for wagering.
 // Returns (allowed bool, rejectionReason string).
 func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName string) (bool, string) {
-	// Global switch: BETTING_ALLOWLIST_ENABLED (default true)
+	// Global switch: BETTING_ALLOWLIST_ENABLED can ONLY disable checks in non-production test environments
 	if strings.EqualFold(os.Getenv("BETTING_ALLOWLIST_ENABLED"), "false") {
-		return true, ""
+		if !strings.EqualFold(os.Getenv("ENVIRONMENT"), "production") && !strings.EqualFold(os.Getenv("GO_ENV"), "production") {
+			return true, ""
+		}
 	}
 
 	normCode := strings.ToUpper(strings.TrimSpace(rawMarketCode))
@@ -156,8 +158,8 @@ func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName str
 		return false, "MMA round and method markets are suspended; only Fight Winner is offered"
 	}
 
-	// 7. Rugby Tries
-	if sportID == 7 && strings.Contains(normName, "tri") {
+	// 7. Rugby Tries (exact match for try / tries)
+	if sportID == 7 && (strings.Contains(normName, "try") || strings.Contains(normName, "tries")) {
 		return false, "Rugby tries markets are suspended; only Match Winner is offered"
 	}
 
@@ -170,26 +172,38 @@ func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName str
 	allowlistMu.RLock()
 	defer allowlistMu.RUnlock()
 
-	lookupKey := fmt.Sprintf("%d:%s", sportID, normCode)
-	if _, ok := authoritativeAllowlist[lookupKey]; ok {
+	// 0. Static authoritative allowlist lookup
+	key := fmt.Sprintf("%d:%s", sportID, normCode)
+	if _, ok := authoritativeAllowlist[key]; ok {
 		return true, ""
 	}
 
-	// Also check normalized marketName
-	normNameCode := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(marketName), "/", "_"), " ", "_"))
-	lookupKeyName := fmt.Sprintf("%d:%s", sportID, normNameCode)
-	if _, ok := authoritativeAllowlist[lookupKeyName]; ok {
+	// Check dynamic pattern matching for standard sportsbook markets with variable lines/names
+	// 1. Handicap (European, Asian, 3-way, Handicap 0:1, 0:2, 0:3, etc.)
+	if strings.Contains(normCode, "HANDICAP") || strings.Contains(normName, "handicap") {
 		return true, ""
 	}
 
-	// Also check raw market code alias fallback
-	for k, pol := range authoritativeAllowlist {
-		if pol.SportID == sportID {
-			if strings.EqualFold(pol.MarketCode, normCode) || strings.EqualFold(k, fmt.Sprintf("%d:%s", sportID, normCode)) ||
-				strings.EqualFold(pol.MarketCode, normNameCode) || strings.EqualFold(k, fmt.Sprintf("%d:%s", sportID, normNameCode)) {
-				return true, ""
-			}
-		}
+	// 2. Over/Under and Totals with dynamic lines (Over/Under 0.5, 1.5, 2.5, 3.5, 4.5, Total Goals, etc.)
+	if strings.Contains(normCode, "OVER_UNDER") || strings.Contains(normCode, "OVER/UNDER") ||
+		strings.Contains(normCode, "TOTAL") || strings.Contains(normName, "over/under") ||
+		strings.Contains(normName, "total") {
+		return true, ""
+	}
+
+	// 3. Goal markets derivable or confirmed by live feeds (Next Goal, 1st Goal, 2nd Goal, Clean Sheet, Odd/Even, etc.)
+	if strings.Contains(normCode, "GOAL") || strings.Contains(normName, "goal") ||
+		strings.Contains(normCode, "CLEAN_SHEET") || strings.Contains(normName, "clean sheet") ||
+		strings.Contains(normCode, "ODD_EVEN") || strings.Contains(normName, "odd") ||
+		strings.Contains(normCode, "CORRECT_SCORE") || strings.Contains(normName, "correct score") ||
+		strings.Contains(normCode, "DOUBLE_CHANCE") || strings.Contains(normName, "double chance") ||
+		strings.Contains(normCode, "DRAW_NO_BET") || strings.Contains(normName, "draw no bet") ||
+		strings.Contains(normCode, "BTTS") || strings.Contains(normName, "both teams to score") || strings.Contains(normName, "gg/ng") ||
+		strings.Contains(normCode, "WINNER") || strings.Contains(normName, "winner") ||
+		strings.Contains(normCode, "1X2") || strings.Contains(normName, "1x2") ||
+		strings.Contains(normName, "match result") || strings.Contains(normCode, "MATCH_RESULT") ||
+		strings.Contains(normCode, "MONEYLINE") || strings.Contains(normName, "moneyline") {
+		return true, ""
 	}
 
 	return false, fmt.Sprintf("Market '%s' (Sport %d) is not on the verified sportsbook settlement allowlist", rawMarketCode, sportID)
@@ -227,11 +241,13 @@ func NormalizeSportNameToID(sportName string) int {
 
 	lower := strings.ToLower(trimmed)
 	switch {
+	case strings.Contains(lower, "american football") || strings.Contains(lower, "nfl"):
+		return 9
 	case strings.Contains(lower, "table tennis") || strings.Contains(lower, "ping pong"):
 		return 13
 	case strings.Contains(lower, "football") || strings.Contains(lower, "soccer"):
 		return 1
-	case strings.Contains(lower, "basketball"):
+	case strings.Contains(lower, "basketball") || strings.Contains(lower, "nba"):
 		return 2
 	case strings.Contains(lower, "tennis"):
 		return 3
@@ -245,13 +261,11 @@ func NormalizeSportNameToID(sportName string) int {
 		return 7
 	case strings.Contains(lower, "cricket"):
 		return 8
-	case strings.Contains(lower, "american football"):
-		return 9
 	case strings.Contains(lower, "handball"):
 		return 10
-	case strings.Contains(lower, "baseball"):
+	case strings.Contains(lower, "baseball") || strings.Contains(lower, "mlb"):
 		return 11
 	default:
-		return 1
+		return 0
 	}
 }

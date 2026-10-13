@@ -40,6 +40,22 @@ var (
 		"1:FB_DNB":              {SportID: 1, SportName: "Football", MarketCode: "FB_DNB", Period: PeriodFullTime, Rationale: "Derived from FT 1X2 result with push on draw"},
 		"1:FB_ASIAN_HANDICAP":   {SportID: 1, SportName: "Football", MarketCode: "FB_ASIAN_HANDICAP", Period: PeriodFullTime, Rationale: "Exact integer quarter-line arithmetic supported"},
 		"1:ASIAN_HANDICAP":      {SportID: 1, SportName: "Football", MarketCode: "ASIAN_HANDICAP", Period: PeriodFullTime, Rationale: "Exact integer quarter-line arithmetic supported"},
+		"1:CORNERS":             {SportID: 1, SportName: "Football", MarketCode: "CORNERS", Period: PeriodFullTime, Rationale: "Full-time total corners supported via SportyBet/Odibets provider statistics"},
+		"1:TOTAL_CORNERS":       {SportID: 1, SportName: "Football", MarketCode: "TOTAL_CORNERS", Period: PeriodFullTime, Rationale: "Full-time total corners supported via SportyBet/Odibets provider statistics"},
+		"1:CORNERS_OVER_UNDER":  {SportID: 1, SportName: "Football", MarketCode: "CORNERS_OVER_UNDER", Period: PeriodFullTime, Rationale: "Full-time total corners supported via SportyBet/Odibets provider statistics"},
+		"1:CORNERS_ODD_EVEN":    {SportID: 1, SportName: "Football", MarketCode: "CORNERS_ODD_EVEN", Period: PeriodFullTime, Rationale: "Corner parity supported via SportyBet/Odibets provider statistics"},
+		"1:CORNERS_1X2":         {SportID: 1, SportName: "Football", MarketCode: "CORNERS_1X2", Period: PeriodFullTime, Rationale: "Corner 1X2 supported via SportyBet/Odibets provider statistics"},
+		"1:CARDS":               {SportID: 1, SportName: "Football", MarketCode: "CARDS", Period: PeriodFullTime, Rationale: "Full-time total cards supported via SportyBet/Odibets provider statistics"},
+		"1:TOTAL_CARDS":         {SportID: 1, SportName: "Football", MarketCode: "TOTAL_CARDS", Period: PeriodFullTime, Rationale: "Full-time total cards supported via SportyBet/Odibets provider statistics"},
+		"1:CARDS_OVER_UNDER":    {SportID: 1, SportName: "Football", MarketCode: "CARDS_OVER_UNDER", Period: PeriodFullTime, Rationale: "Full-time total cards supported via SportyBet/Odibets provider statistics"},
+		"1:HT_1X2":              {SportID: 1, SportName: "Football", MarketCode: "HT_1X2", Period: PeriodHalfTime, Rationale: "Half-time period score confirmed by provider live score feeds"},
+		"1:1ST_HALF":            {SportID: 1, SportName: "Football", MarketCode: "1ST_HALF", Period: PeriodHalfTime, Rationale: "Half-time period score confirmed by provider live score feeds"},
+		"1:FIRST_HALF":          {SportID: 1, SportName: "Football", MarketCode: "FIRST_HALF", Period: PeriodHalfTime, Rationale: "Half-time period score confirmed by provider live score feeds"},
+		"1:HALF_TIME":           {SportID: 1, SportName: "Football", MarketCode: "HALF_TIME", Period: PeriodHalfTime, Rationale: "Half-time period score confirmed by provider live score feeds"},
+		"1:HT_OVER_UNDER":       {SportID: 1, SportName: "Football", MarketCode: "HT_OVER_UNDER", Period: PeriodHalfTime, Rationale: "Half-time total goals confirmed by provider live score feeds"},
+		"1:1ST_HALF_OVER_UNDER": {SportID: 1, SportName: "Football", MarketCode: "1ST_HALF_OVER_UNDER", Period: PeriodHalfTime, Rationale: "Half-time total goals confirmed by provider live score feeds"},
+		"1:ODD_EVEN":            {SportID: 1, SportName: "Football", MarketCode: "ODD_EVEN", Period: PeriodFullTime, Rationale: "Match goal parity supported by FT score"},
+		"1:TOTAL_ODD_EVEN":      {SportID: 1, SportName: "Football", MarketCode: "TOTAL_ODD_EVEN", Period: PeriodFullTime, Rationale: "Match goal parity supported by FT score"},
 
 		// 2. Basketball (SportID 2) - Includes Overtime
 		"2:BB_MONEYLINE":    {SportID: 2, SportName: "Basketball", MarketCode: "BB_MONEYLINE", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game winner including OT supported by feed"},
@@ -107,39 +123,43 @@ func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName str
 		return false, "Table Tennis is quarantined from wagering until dedicated official umpire feeds are integrated"
 	}
 
-	// 2. Corners & Cards Gate (data missing post-aiscore decommissioning)
-	if strings.Contains(normCode, "CORNER") || strings.Contains(normName, "corner") {
-		return false, "Corners markets are suspended pending feed statistics integration"
+	// 2. Corners & Cards Gate (allow Football since provider stats from SportyBet/Odibets are integrated)
+	if sportID != 1 {
+		if strings.Contains(normCode, "CORNER") || strings.Contains(normName, "corner") {
+			return false, "Corners markets are suspended pending feed statistics integration"
+		}
+		if strings.Contains(normCode, "CARD") || strings.Contains(normName, "card") {
+			return false, "Cards markets are suspended pending feed statistics integration"
+		}
 	}
-	if strings.Contains(normCode, "CARD") || strings.Contains(normName, "card") {
-		return false, "Cards markets are suspended pending feed statistics integration"
-	}
 
-	// 3. Half-Time & Period/Quarter/Set/Innings Gate (missing period breakdown)
-	isHT := normCode == "HT" || strings.HasPrefix(normCode, "HT_") || strings.HasSuffix(normCode, "_HT") ||
-		strings.Contains(normCode, "_HT_") || strings.Contains(normCode, "HALF_TIME") || strings.Contains(normCode, "FIRST_HALF") ||
-		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF")
+	// 3. Half-Time & Period/Quarter/Set/Innings Gate (allow Football HT since provider period scores are integrated)
+	if sportID != 1 {
+		isHT := normCode == "HT" || strings.HasPrefix(normCode, "HT_") || strings.HasSuffix(normCode, "_HT") ||
+			strings.Contains(normCode, "_HT_") || strings.Contains(normCode, "HALF_TIME") || strings.Contains(normCode, "FIRST_HALF") ||
+			strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF")
 
-	isQuarter := normCode == "Q1" || normCode == "Q2" || normCode == "Q3" || normCode == "Q4" ||
-		strings.HasPrefix(normCode, "Q1_") || strings.HasPrefix(normCode, "Q2_") || strings.HasPrefix(normCode, "Q3_") || strings.HasPrefix(normCode, "Q4_") ||
-		strings.HasSuffix(normCode, "_Q1") || strings.HasSuffix(normCode, "_Q2") || strings.HasSuffix(normCode, "_Q3") || strings.HasSuffix(normCode, "_Q4")
+		isQuarter := normCode == "Q1" || normCode == "Q2" || normCode == "Q3" || normCode == "Q4" ||
+			strings.HasPrefix(normCode, "Q1_") || strings.HasPrefix(normCode, "Q2_") || strings.HasPrefix(normCode, "Q3_") || strings.HasPrefix(normCode, "Q4_") ||
+			strings.HasSuffix(normCode, "_Q1") || strings.HasSuffix(normCode, "_Q2") || strings.HasSuffix(normCode, "_Q3") || strings.HasSuffix(normCode, "_Q4")
 
-	isSet := normCode == "S1" || normCode == "S2" || normCode == "S3" ||
-		strings.HasPrefix(normCode, "S1_") || strings.HasPrefix(normCode, "S2_") || strings.HasPrefix(normCode, "S3_") ||
-		strings.HasSuffix(normCode, "_S1") || strings.HasSuffix(normCode, "_S2") || strings.HasSuffix(normCode, "_S3")
+		isSet := normCode == "S1" || normCode == "S2" || normCode == "S3" ||
+			strings.HasPrefix(normCode, "S1_") || strings.HasPrefix(normCode, "S2_") || strings.HasPrefix(normCode, "S3_") ||
+			strings.HasSuffix(normCode, "_S1") || strings.HasSuffix(normCode, "_S2") || strings.HasSuffix(normCode, "_S3")
 
-	isPeriod := normCode == "P1" || normCode == "P2" || normCode == "P3" ||
-		strings.HasPrefix(normCode, "P1_") || strings.HasPrefix(normCode, "P2_") || strings.HasPrefix(normCode, "P3_") ||
-		strings.HasSuffix(normCode, "_P1") || strings.HasSuffix(normCode, "_P2") || strings.HasSuffix(normCode, "_P3")
+		isPeriod := normCode == "P1" || normCode == "P2" || normCode == "P3" ||
+			strings.HasPrefix(normCode, "P1_") || strings.HasPrefix(normCode, "P2_") || strings.HasPrefix(normCode, "P3_") ||
+			strings.HasSuffix(normCode, "_P1") || strings.HasSuffix(normCode, "_P2") || strings.HasSuffix(normCode, "_P3")
 
-	isPeriodMarket := isHT || isQuarter || isSet || isPeriod ||
-		strings.Contains(normName, "1st half") || strings.Contains(normName, "first half") ||
-		strings.Contains(normName, "halftime") || strings.Contains(normName, "half time") || strings.Contains(normName, "2nd half") ||
-		strings.Contains(normName, "quarter") || strings.Contains(normName, "1st quarter") || strings.Contains(normName, "2nd quarter") ||
-		strings.Contains(normName, "set 1") || strings.Contains(normName, "set 2") || strings.Contains(normName, "1st set") ||
-		strings.Contains(normName, "period 1") || strings.Contains(normName, "period 2") || strings.Contains(normName, "1st period")
-	if isPeriodMarket {
-		return false, "Period and interval markets (HT/Quarter/Set/Period) are suspended pending verified period feed delivery"
+		isPeriodMarket := isHT || isQuarter || isSet || isPeriod ||
+			strings.Contains(normName, "1st half") || strings.Contains(normName, "first half") ||
+			strings.Contains(normName, "halftime") || strings.Contains(normName, "half time") || strings.Contains(normName, "2nd half") ||
+			strings.Contains(normName, "quarter") || strings.Contains(normName, "1st quarter") || strings.Contains(normName, "2nd quarter") ||
+			strings.Contains(normName, "set 1") || strings.Contains(normName, "set 2") || strings.Contains(normName, "1st set") ||
+			strings.Contains(normName, "period 1") || strings.Contains(normName, "period 2") || strings.Contains(normName, "1st period")
+		if isPeriodMarket {
+			return false, "Period and interval markets (HT/Quarter/Set/Period) are suspended pending verified period feed delivery"
+		}
 	}
 
 	// 4. Ice Hockey Regulation 1X2 Gate (conflict with OT / missing period breakdowns)
@@ -203,6 +223,18 @@ func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName str
 		strings.Contains(normCode, "1X2") || strings.Contains(normName, "1x2") ||
 		strings.Contains(normName, "match result") || strings.Contains(normCode, "MATCH_RESULT") ||
 		strings.Contains(normCode, "MONEYLINE") || strings.Contains(normName, "moneyline") {
+		return true, ""
+	}
+
+	// 4. Corners & Cards (derivable and confirmed by provider statistics)
+	if strings.Contains(normCode, "CORNER") || strings.Contains(normName, "corner") ||
+		strings.Contains(normCode, "CARD") || strings.Contains(normName, "card") {
+		return true, ""
+	}
+
+	// 5. Half-Time & Interval markets (derivable and confirmed by provider period scores)
+	if strings.Contains(normCode, "HT") || strings.Contains(normName, "half") || strings.Contains(normName, "halftime") ||
+		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF") {
 		return true, ""
 	}
 

@@ -123,43 +123,39 @@ func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName str
 		return false, "Table Tennis is quarantined from wagering until dedicated official umpire feeds are integrated"
 	}
 
-	// 2. Corners & Cards Gate (allow Football since provider stats from SportyBet/Odibets are integrated)
-	if sportID != 1 {
-		if strings.Contains(normCode, "CORNER") || strings.Contains(normName, "corner") {
-			return false, "Corners markets are suspended pending feed statistics integration"
-		}
-		if strings.Contains(normCode, "CARD") || strings.Contains(normName, "card") {
-			return false, "Cards markets are suspended pending feed statistics integration"
-		}
+	// 2. Corners & Cards Gate (suspended pending feed statistics integration)
+	if strings.Contains(normCode, "CORNER") || strings.Contains(normName, "corner") {
+		return false, "Corners markets are suspended pending feed statistics integration"
+	}
+	if strings.Contains(normCode, "CARD") || strings.Contains(normName, "card") {
+		return false, "Cards markets are suspended pending feed statistics integration"
 	}
 
-	// 3. Half-Time & Period/Quarter/Set/Innings Gate (allow Football HT since provider period scores are integrated)
-	if sportID != 1 {
-		isHT := normCode == "HT" || strings.HasPrefix(normCode, "HT_") || strings.HasSuffix(normCode, "_HT") ||
-			strings.Contains(normCode, "_HT_") || strings.Contains(normCode, "HALF_TIME") || strings.Contains(normCode, "FIRST_HALF") ||
-			strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF")
+	// 3. Half-Time & Period/Quarter/Set/Innings Gate
+	isHT := normCode == "HT" || strings.HasPrefix(normCode, "HT_") || strings.HasSuffix(normCode, "_HT") ||
+		strings.Contains(normCode, "_HT_") || strings.Contains(normCode, "HALF_TIME") || strings.Contains(normCode, "FIRST_HALF") ||
+		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF")
 
-		isQuarter := normCode == "Q1" || normCode == "Q2" || normCode == "Q3" || normCode == "Q4" ||
-			strings.HasPrefix(normCode, "Q1_") || strings.HasPrefix(normCode, "Q2_") || strings.HasPrefix(normCode, "Q3_") || strings.HasPrefix(normCode, "Q4_") ||
-			strings.HasSuffix(normCode, "_Q1") || strings.HasSuffix(normCode, "_Q2") || strings.HasSuffix(normCode, "_Q3") || strings.HasSuffix(normCode, "_Q4")
+	isQuarter := normCode == "Q1" || normCode == "Q2" || normCode == "Q3" || normCode == "Q4" ||
+		strings.HasPrefix(normCode, "Q1_") || strings.HasPrefix(normCode, "Q2_") || strings.HasPrefix(normCode, "Q3_") || strings.HasPrefix(normCode, "Q4_") ||
+		strings.HasSuffix(normCode, "_Q1") || strings.HasSuffix(normCode, "_Q2") || strings.HasSuffix(normCode, "_Q3") || strings.HasSuffix(normCode, "_Q4")
 
-		isSet := normCode == "S1" || normCode == "S2" || normCode == "S3" ||
-			strings.HasPrefix(normCode, "S1_") || strings.HasPrefix(normCode, "S2_") || strings.HasPrefix(normCode, "S3_") ||
-			strings.HasSuffix(normCode, "_S1") || strings.HasSuffix(normCode, "_S2") || strings.HasSuffix(normCode, "_S3")
+	isSet := normCode == "S1" || normCode == "S2" || normCode == "S3" ||
+		strings.HasPrefix(normCode, "S1_") || strings.HasPrefix(normCode, "S2_") || strings.HasPrefix(normCode, "S3_") ||
+		strings.HasSuffix(normCode, "_S1") || strings.HasSuffix(normCode, "_S2") || strings.HasSuffix(normCode, "_S3")
 
-		isPeriod := normCode == "P1" || normCode == "P2" || normCode == "P3" ||
-			strings.HasPrefix(normCode, "P1_") || strings.HasPrefix(normCode, "P2_") || strings.HasPrefix(normCode, "P3_") ||
-			strings.HasSuffix(normCode, "_P1") || strings.HasSuffix(normCode, "_P2") || strings.HasSuffix(normCode, "_P3")
+	isPeriod := normCode == "P1" || normCode == "P2" || normCode == "P3" ||
+		strings.HasPrefix(normCode, "P1_") || strings.HasPrefix(normCode, "P2_") || strings.HasPrefix(normCode, "P3_") ||
+		strings.HasSuffix(normCode, "_P1") || strings.HasSuffix(normCode, "_P2") || strings.HasSuffix(normCode, "_P3")
 
-		isPeriodMarket := isHT || isQuarter || isSet || isPeriod ||
-			strings.Contains(normName, "1st half") || strings.Contains(normName, "first half") ||
-			strings.Contains(normName, "halftime") || strings.Contains(normName, "half time") || strings.Contains(normName, "2nd half") ||
-			strings.Contains(normName, "quarter") || strings.Contains(normName, "1st quarter") || strings.Contains(normName, "2nd quarter") ||
-			strings.Contains(normName, "set 1") || strings.Contains(normName, "set 2") || strings.Contains(normName, "1st set") ||
-			strings.Contains(normName, "period 1") || strings.Contains(normName, "period 2") || strings.Contains(normName, "1st period")
-		if isPeriodMarket {
-			return false, "Period and interval markets (HT/Quarter/Set/Period) are suspended pending verified period feed delivery"
-		}
+	isPeriodMarket := isHT || isQuarter || isSet || isPeriod ||
+		strings.Contains(normName, "1st half") || strings.Contains(normName, "first half") ||
+		strings.Contains(normName, "halftime") || strings.Contains(normName, "half time") || strings.Contains(normName, "2nd half") ||
+		strings.Contains(normName, "quarter") || strings.Contains(normName, "1st quarter") || strings.Contains(normName, "2nd quarter") ||
+		strings.Contains(normName, "set 1") || strings.Contains(normName, "set 2") || strings.Contains(normName, "1st set") ||
+		strings.Contains(normName, "period 1") || strings.Contains(normName, "period 2") || strings.Contains(normName, "1st period")
+	if isPeriodMarket {
+		return false, "Period and interval markets (HT/Quarter/Set/Period) are suspended pending verified period feed delivery"
 	}
 
 	// 4. Ice Hockey Regulation 1X2 Gate (conflict with OT / missing period breakdowns)

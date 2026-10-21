@@ -146,8 +146,16 @@ paths:
       responses:
         '200':
           description: Ticket settlement decision and graded legs
-        '404':
-          description: Ticket not found
+  /client/sandbox/generate:
+    post:
+      summary: Generate Synthetic Match (Sandbox Only)
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '201':
+          description: Synthetic match generated
+        '429':
+          description: Daily sport quota exceeded
   /client/keys:
     get:
       summary: List Client API Keys

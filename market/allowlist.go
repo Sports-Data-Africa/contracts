@@ -102,12 +102,32 @@ var (
 		"6:MM_FIGHT_WINNER": {SportID: 6, SportName: "MMA", MarketCode: "MM_FIGHT_WINNER", Period: PeriodFullTime, Rationale: "Fight winner supported by feed"},
 		"6:FIGHT_WINNER":    {SportID: 6, SportName: "MMA", MarketCode: "FIGHT_WINNER", Period: PeriodFullTime, Rationale: "Fight winner supported by feed"},
 		"6:WINNER":          {SportID: 6, SportName: "MMA", MarketCode: "WINNER", Period: PeriodFullTime, Rationale: "Fight winner supported by feed"},
+		// 1. Football additional verified full-time markets
+		"1:EUROPEAN_HANDICAP":    {SportID: 1, SportName: "Football", MarketCode: "EUROPEAN_HANDICAP", Period: PeriodFullTime, Rationale: "3-way integer handicap confirmed by FT score"},
+		"1:FB_EUROPEAN_HANDICAP": {SportID: 1, SportName: "Football", MarketCode: "FB_EUROPEAN_HANDICAP", Period: PeriodFullTime, Rationale: "3-way integer handicap confirmed by FT score"},
+		"1:CORRECT_SCORE":        {SportID: 1, SportName: "Football", MarketCode: "CORRECT_SCORE", Period: PeriodFullTime, Rationale: "Exact FT score match"},
+		"1:FB_CORRECT_SCORE":     {SportID: 1, SportName: "Football", MarketCode: "FB_CORRECT_SCORE", Period: PeriodFullTime, Rationale: "Exact FT score match"},
+		"1:CLEAN_SHEET":          {SportID: 1, SportName: "Football", MarketCode: "CLEAN_SHEET", Period: PeriodFullTime, Rationale: "Zero opponent goals confirmed by FT score"},
+		"1:FB_CLEAN_SHEET":       {SportID: 1, SportName: "Football", MarketCode: "FB_CLEAN_SHEET", Period: PeriodFullTime, Rationale: "Zero opponent goals confirmed by FT score"},
+		"1:WIN_TO_NIL":           {SportID: 1, SportName: "Football", MarketCode: "WIN_TO_NIL", Period: PeriodFullTime, Rationale: "Win and clean sheet confirmed by FT score"},
+		"1:FB_WIN_TO_NIL":        {SportID: 1, SportName: "Football", MarketCode: "FB_WIN_TO_NIL", Period: PeriodFullTime, Rationale: "Win and clean sheet confirmed by FT score"},
 	}
 )
+
+// CanPlaceMarket verifies whether a market can be accepted for placement on a fixture.
+// It enforces canonical registry presence, sport release rules, and verified result contracts.
+// Unknown or unmapped markets fail closed.
+func CanPlaceMarket(sportID int, rawMarketCode, marketName, period string) (bool, string) {
+	return evaluateMarketPlacement(sportID, rawMarketCode, marketName, period)
+}
 
 // IsMarketSettleableAndAllowlisted checks whether a sport and market is approved for wagering.
 // Returns (allowed bool, rejectionReason string).
 func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName string) (bool, string) {
+	return evaluateMarketPlacement(sportID, rawMarketCode, marketName, "")
+}
+
+func evaluateMarketPlacement(sportID int, rawMarketCode, marketName, period string) (bool, string) {
 	// Global switch: BETTING_ALLOWLIST_ENABLED can ONLY disable checks in non-production test environments
 	if strings.EqualFold(os.Getenv("BETTING_ALLOWLIST_ENABLED"), "false") {
 		if !strings.EqualFold(os.Getenv("ENVIRONMENT"), "production") && !strings.EqualFold(os.Getenv("GO_ENV"), "production") {
@@ -117,10 +137,14 @@ func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName str
 
 	normCode := strings.ToUpper(strings.TrimSpace(rawMarketCode))
 	normName := strings.ToLower(strings.TrimSpace(marketName))
+	normPeriod := strings.ToUpper(strings.TrimSpace(period))
 
-	// 1. Quarantined Sports Gate: Table Tennis (SportID 13)
+	// 1. Quarantined Sports Gate: Table Tennis (SportID 13) and non-released sports (9, 10, 11)
 	if sportID == 13 || strings.Contains(normName, "table tennis") || strings.Contains(normName, "ping pong") {
 		return false, "Table Tennis is quarantined from wagering until dedicated official umpire feeds are integrated"
+	}
+	if sportID == 9 || sportID == 10 || sportID == 11 {
+		return false, fmt.Sprintf("Sport ID %d is quarantined from client wagering pending full provider certification", sportID)
 	}
 
 	// 2. Corners & Cards Gate (suspended pending feed statistics integration)
@@ -134,19 +158,22 @@ func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName str
 	// 3. Half-Time & Period/Quarter/Set/Innings Gate
 	isHT := normCode == "HT" || strings.HasPrefix(normCode, "HT_") || strings.HasSuffix(normCode, "_HT") ||
 		strings.Contains(normCode, "_HT_") || strings.Contains(normCode, "HALF_TIME") || strings.Contains(normCode, "FIRST_HALF") ||
-		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF")
+		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF") || normPeriod == PeriodHalfTime || normPeriod == PeriodSecondHalf
 
 	isQuarter := normCode == "Q1" || normCode == "Q2" || normCode == "Q3" || normCode == "Q4" ||
 		strings.HasPrefix(normCode, "Q1_") || strings.HasPrefix(normCode, "Q2_") || strings.HasPrefix(normCode, "Q3_") || strings.HasPrefix(normCode, "Q4_") ||
-		strings.HasSuffix(normCode, "_Q1") || strings.HasSuffix(normCode, "_Q2") || strings.HasSuffix(normCode, "_Q3") || strings.HasSuffix(normCode, "_Q4")
+		strings.HasSuffix(normCode, "_Q1") || strings.HasSuffix(normCode, "_Q2") || strings.HasSuffix(normCode, "_Q3") || strings.HasSuffix(normCode, "_Q4") ||
+		normPeriod == PeriodQuarter1 || normPeriod == PeriodQuarter2 || normPeriod == PeriodQuarter3 || normPeriod == PeriodQuarter4
 
 	isSet := normCode == "S1" || normCode == "S2" || normCode == "S3" ||
 		strings.HasPrefix(normCode, "S1_") || strings.HasPrefix(normCode, "S2_") || strings.HasPrefix(normCode, "S3_") ||
-		strings.HasSuffix(normCode, "_S1") || strings.HasSuffix(normCode, "_S2") || strings.HasSuffix(normCode, "_S3")
+		strings.HasSuffix(normCode, "_S1") || strings.HasSuffix(normCode, "_S2") || strings.HasSuffix(normCode, "_S3") ||
+		normPeriod == PeriodSet1 || normPeriod == PeriodSet2 || normPeriod == PeriodSet3
 
 	isPeriod := normCode == "P1" || normCode == "P2" || normCode == "P3" ||
 		strings.HasPrefix(normCode, "P1_") || strings.HasPrefix(normCode, "P2_") || strings.HasPrefix(normCode, "P3_") ||
-		strings.HasSuffix(normCode, "_P1") || strings.HasSuffix(normCode, "_P2") || strings.HasSuffix(normCode, "_P3")
+		strings.HasSuffix(normCode, "_P1") || strings.HasSuffix(normCode, "_P2") || strings.HasSuffix(normCode, "_P3") ||
+		normPeriod == PeriodPeriod1 || normPeriod == PeriodPeriod2 || normPeriod == PeriodPeriod3
 
 	isPeriodMarket := isHT || isQuarter || isSet || isPeriod ||
 		strings.Contains(normName, "1st half") || strings.Contains(normName, "first half") ||
@@ -184,56 +211,28 @@ func IsMarketSettleableAndAllowlisted(sportID int, rawMarketCode, marketName str
 		return false, "Cricket player and innings props are suspended; only Match Winner is offered"
 	}
 
-	// Check against authoritative allowlist map
+	// 9. Exact Authoritative Allowlist Lookup
 	allowlistMu.RLock()
 	defer allowlistMu.RUnlock()
 
-	// 0. Static authoritative allowlist lookup
 	key := fmt.Sprintf("%d:%s", sportID, normCode)
 	if _, ok := authoritativeAllowlist[key]; ok {
 		return true, ""
 	}
 
-	// Check dynamic pattern matching for standard sportsbook markets with variable lines/names
-	// 1. Handicap (European, Asian, 3-way, Handicap 0:1, 0:2, 0:3, etc.)
-	if strings.Contains(normCode, "HANDICAP") || strings.Contains(normName, "handicap") {
-		return true, ""
+	// Also check by canonical catalogue definition if code is normalized canonical code
+	if normPeriod == "" {
+		normPeriod = PeriodFullTime
+	}
+	if def, exists := GetMarketDefinition(sportID, normCode, normPeriod); exists && def.Status == MarketStatusActive {
+		// Ensure a deterministic settlement rule actually exists for this catalogue entry
+		if _, hasRule := Get(sportID, normCode, normPeriod, def.RuleVersion); hasRule {
+			return true, ""
+		}
 	}
 
-	// 2. Over/Under and Totals with dynamic lines (Over/Under 0.5, 1.5, 2.5, 3.5, 4.5, Total Goals, etc.)
-	if strings.Contains(normCode, "OVER_UNDER") || strings.Contains(normCode, "OVER/UNDER") ||
-		strings.Contains(normCode, "TOTAL") || strings.Contains(normName, "over/under") ||
-		strings.Contains(normName, "total") {
-		return true, ""
-	}
-
-	// 3. Goal markets derivable or confirmed by live feeds (Next Goal, 1st Goal, 2nd Goal, Clean Sheet, Odd/Even, etc.)
-	if strings.Contains(normCode, "GOAL") || strings.Contains(normName, "goal") ||
-		strings.Contains(normCode, "CLEAN_SHEET") || strings.Contains(normName, "clean sheet") ||
-		strings.Contains(normCode, "ODD_EVEN") || strings.Contains(normName, "odd") ||
-		strings.Contains(normCode, "CORRECT_SCORE") || strings.Contains(normName, "correct score") ||
-		strings.Contains(normCode, "DOUBLE_CHANCE") || strings.Contains(normName, "double chance") ||
-		strings.Contains(normCode, "DRAW_NO_BET") || strings.Contains(normName, "draw no bet") ||
-		strings.Contains(normCode, "BTTS") || strings.Contains(normName, "both teams to score") || strings.Contains(normName, "gg/ng") ||
-		strings.Contains(normCode, "WINNER") || strings.Contains(normName, "winner") ||
-		strings.Contains(normCode, "1X2") || strings.Contains(normName, "1x2") ||
-		strings.Contains(normName, "match result") || strings.Contains(normCode, "MATCH_RESULT") ||
-		strings.Contains(normCode, "MONEYLINE") || strings.Contains(normName, "moneyline") {
-		return true, ""
-	}
-
-	// 4. Corners & Cards (derivable and confirmed by provider statistics)
-	if strings.Contains(normCode, "CORNER") || strings.Contains(normName, "corner") ||
-		strings.Contains(normCode, "CARD") || strings.Contains(normName, "card") {
-		return true, ""
-	}
-
-	// 5. Half-Time & Interval markets (derivable and confirmed by provider period scores)
-	if strings.Contains(normCode, "HT") || strings.Contains(normName, "half") || strings.Contains(normName, "halftime") ||
-		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF") {
-		return true, ""
-	}
-
+	// Strictly FAIL CLOSED on unknown, unmapped, or fuzzy markets.
+	// No broad string matching (e.g. contains "TOTAL", "GOAL", "WINNER", "HANDICAP") is permitted.
 	return false, fmt.Sprintf("Market '%s' (Sport %d) is not on the verified sportsbook settlement allowlist", rawMarketCode, sportID)
 }
 

@@ -47,6 +47,15 @@ func TestIsMarketSettleableAndAllowlisted_Matrix(t *testing.T) {
 		{"Rugby Tries", 7, "TOTAL_TRIES", "Total Tries Over/Under", false},
 		{"Cricket Most Sixes", 8, "MOST_SIXES", "Most Sixes", false},
 		{"Tennis Total Games", 3, "TOTAL_GAMES", "Total Games Over/Under", false},
+
+		// Strictly Reject Unknown / Unmapped Fuzzy Markets (No broad regex pass)
+		{"Unmapped Throw-Ins (Contains TOTAL)", 1, "TOTAL_THROW_INS", "Total Throw-Ins Over/Under", false},
+		{"Unmapped Goal Prop (Contains GOAL)", 1, "NEXT_GOALSCORER", "Next Goalscorer", false},
+		{"Unmapped Time Winner (Contains WINNER)", 1, "MINUTE_15_WINNER", "15 Minute Winner", false},
+		{"Unmapped Prop Handicap (Contains HANDICAP)", 1, "CORNER_HANDICAP_PROP", "Corner Handicap Match Bet", false},
+		{"American Football Quarantined", 9, "AF_MONEYLINE", "Moneyline", false},
+		{"Handball Quarantined", 10, "HB_1X2", "Match Result", false},
+		{"Baseball Quarantined", 11, "BS_MONEYLINE", "Moneyline", false},
 	}
 
 	for _, tc := range tests {
@@ -56,6 +65,26 @@ func TestIsMarketSettleableAndAllowlisted_Matrix(t *testing.T) {
 				t.Errorf("%s: expected allowed=%v, got %v (reason: %s)", tc.name, tc.expectAllow, allowed, reason)
 			}
 		})
+	}
+}
+
+func TestCanPlaceMarket_DirectCapability(t *testing.T) {
+	// 1. Approved full-time market
+	allowed, reason := CanPlaceMarket(1, "FB_1X2", "1X2 / Match Result", PeriodFullTime)
+	if !allowed {
+		t.Errorf("expected FB_1X2 to be allowed for placement, got false: %s", reason)
+	}
+
+	// 2. Suspended period market
+	allowedHT, _ := CanPlaceMarket(1, "FB_TOTAL_GOALS", "Total Goals Over/Under", PeriodHalfTime)
+	if allowedHT {
+		t.Errorf("expected FB_TOTAL_GOALS in HT to be suspended pending feed certification, got allowed=true")
+	}
+
+	// 3. Unmapped novelty market fails closed
+	allowedNovelty, _ := CanPlaceMarket(1, "YELLOW_CARD_MINUTE", "First Yellow Card Minute", PeriodFullTime)
+	if allowedNovelty {
+		t.Errorf("expected unmapped novelty market to fail closed, got allowed=true")
 	}
 }
 

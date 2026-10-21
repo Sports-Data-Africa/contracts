@@ -1,6 +1,7 @@
 package market
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -1037,4 +1038,286 @@ func TestPhase1EdgeCasesAndDefects(t *testing.T) {
 		})
 	}
 }
+
+func TestPhase2SecondHalfTelemetryAndFaultInjection(t *testing.T) {
+	now := time.Now()
+
+	// 1. Live match: in-play 2H with cumulative score (Score: 2-1, Period: 2H, IsFinished: false)
+	// Must return BetStatusOpen (unresolved), NOT BetStatusWon / Lost, and Settled: false
+	t.Run("Live 2H match with cumulative score remains OPEN and does not settle", func(t *testing.T) {
+		liveState := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-2H-LIVE",
+			SportID:            1,
+			Status:             FixtureStatusLive2H,
+			IsFinished:         false,
+			Score:              ScoreData{Home: 2, Away: 1},
+			PeriodScores: map[string]ScoreData{
+				"1H": {Home: 1, Away: 0},
+				"HT": {Home: 1, Away: 0},
+			},
+			ScoreConfirmedAt: now,
+		}
+		bet := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "1",
+			RuleVersion:         1,
+		}
+		res, err := Evaluate(liveState, bet)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Status != BetStatusOpen {
+			t.Errorf("expected BetStatusOpen for live 2H match, got %s", res.Status)
+		}
+		if res.Settled {
+			t.Errorf("expected Settled=false for live 2H match, got true")
+		}
+	})
+
+	// 2. Finished match with missing HT score: must fail closed to BetStatusSettlementHold
+	t.Run("Finished match with missing HT score produces SETTLEMENT_HOLD", func(t *testing.T) {
+		stateNoHT := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-2H-NO-HT",
+			SportID:            1,
+			Status:             FixtureStatusFT,
+			IsFinished:         true,
+			Score:              ScoreData{Home: 3, Away: 1},
+			PeriodScores:       map[string]ScoreData{}, // No 1H or HT!
+			ScoreConfirmedAt:   now,
+		}
+		bet := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "1",
+			RuleVersion:         1,
+		}
+		res, err := Evaluate(stateNoHT, bet)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Status != BetStatusSettlementHold {
+			t.Errorf("expected BetStatusSettlementHold when HT score is missing, got %s", res.Status)
+		}
+		if res.Settled {
+			t.Errorf("expected Settled=false on missing HT score, got true")
+		}
+	})
+
+	// 3. Finished match with contradictory scores (FT < HT): must fail closed to BetStatusSettlementHold
+	t.Run("Contradictory FT and HT scores (FT < HT) produces SETTLEMENT_HOLD", func(t *testing.T) {
+		stateContradictory := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-2H-CONTRADICTORY",
+			SportID:            1,
+			Status:             FixtureStatusFT,
+			IsFinished:         true,
+			Score:              ScoreData{Home: 1, Away: 1}, // FT Home is 1, but HT Home was 2!
+			PeriodScores: map[string]ScoreData{
+				"1H": {Home: 2, Away: 0},
+				"HT": {Home: 2, Away: 0},
+			},
+			ScoreConfirmedAt: now,
+		}
+		bet := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "1",
+			RuleVersion:         1,
+		}
+		res, err := Evaluate(stateContradictory, bet)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Status != BetStatusSettlementHold {
+			t.Errorf("expected BetStatusSettlementHold on FT < HT contradiction, got %s", res.Status)
+		}
+		if res.Settled {
+			t.Errorf("expected Settled=false on contradiction, got true")
+		}
+	})
+
+	// 4. Negative score telemetry: must fail closed to BetStatusSettlementHold
+	t.Run("Negative score telemetry produces SETTLEMENT_HOLD", func(t *testing.T) {
+		stateNegative := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-2H-NEGATIVE",
+			SportID:            1,
+			Status:             FixtureStatusFT,
+			IsFinished:         true,
+			Score:              ScoreData{Home: -1, Away: 2},
+			PeriodScores: map[string]ScoreData{
+				"1H": {Home: 0, Away: 1},
+			},
+			ScoreConfirmedAt: now,
+		}
+		bet := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "1",
+			RuleVersion:         1,
+		}
+		res, err := Evaluate(stateNegative, bet)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Status != BetStatusSettlementHold {
+			t.Errorf("expected BetStatusSettlementHold on negative score, got %s", res.Status)
+		}
+	})
+
+	// 5. Invalid selection code on FB_2H_1X2: must fail closed to BetStatusSettlementHold
+	t.Run("Invalid selection code on FB_2H_1X2 produces SETTLEMENT_HOLD", func(t *testing.T) {
+		stateValid := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-2H-VALID",
+			SportID:            1,
+			Status:             FixtureStatusFT,
+			IsFinished:         true,
+			Score:              ScoreData{Home: 2, Away: 1},
+			PeriodScores: map[string]ScoreData{
+				"1H": {Home: 1, Away: 0},
+			},
+			ScoreConfirmedAt: now,
+		}
+		bet := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "INVALID_CODE",
+			RuleVersion:         1,
+		}
+		res, err := Evaluate(stateValid, bet)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Status != BetStatusSettlementHold {
+			t.Errorf("expected BetStatusSettlementHold on invalid selection code, got %s", res.Status)
+		}
+	})
+
+	// 6. Valid post-match derivation: FT 2-1 with HT 1-0 -> 2H was 1-1 (Draw).
+	// Selection "X" (Draw) MUST WIN. Selection "1" MUST LOSE.
+	t.Run("Valid post-match derivation: FT 2-1, HT 1-0 -> 2H was 1-1 Draw", func(t *testing.T) {
+		stateValid := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-2H-VALID",
+			SportID:            1,
+			Status:             FixtureStatusFT,
+			IsFinished:         true,
+			Score:              ScoreData{Home: 2, Away: 1}, // 2H home: 2-1=1, away: 1-0=1 -> 1-1 Draw
+			PeriodScores: map[string]ScoreData{
+				"1H": {Home: 1, Away: 0},
+			},
+			ScoreConfirmedAt: now,
+		}
+		betDraw := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "X",
+			RuleVersion:         1,
+		}
+		resDraw, err := Evaluate(stateValid, betDraw)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resDraw.Status != BetStatusWon || resDraw.PayoutFactor != 1.0 {
+			t.Errorf("expected 2H Draw bet to WIN, got %s (factor: %.2f)", resDraw.Status, resDraw.PayoutFactor)
+		}
+
+		betHome := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "1",
+			RuleVersion:         1,
+		}
+		resHome, err := Evaluate(stateValid, betHome)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resHome.Status != BetStatusLost || resHome.PayoutFactor != 0.0 {
+			t.Errorf("expected 2H Home bet to LOSE (since 2H was 1-1), got %s (factor: %.2f)", resHome.Status, resHome.PayoutFactor)
+		}
+	})
+
+	// 7. Native 2H score present in PeriodScores: evaluates directly from PeriodScores["2H"]
+	t.Run("Native 2H score in PeriodScores is evaluated directly", func(t *testing.T) {
+		stateNative := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-2H-NATIVE",
+			SportID:            1,
+			Status:             FixtureStatusFT,
+			IsFinished:         true,
+			Score:              ScoreData{Home: 3, Away: 1},
+			PeriodScores: map[string]ScoreData{
+				"1H": {Home: 3, Away: 0},
+				"2H": {Home: 0, Away: 1}, // 2H Away won 0-1
+			},
+			ScoreConfirmedAt: now,
+		}
+		betAway := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "2",
+			RuleVersion:         1,
+		}
+		resAway, err := Evaluate(stateNative, betAway)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resAway.Status != BetStatusWon || resAway.PayoutFactor != 1.0 {
+			t.Errorf("expected 2H Away bet to WIN on native 2H 0-1 score, got %s", resAway.Status)
+		}
+	})
+
+	// 8. FB_TOTAL_GOALS (2H): refuses to infer or subtract without native 2H period score
+	t.Run("FB_TOTAL_GOALS (2H) refuses to infer and produces SETTLEMENT_HOLD if native 2H missing", func(t *testing.T) {
+		stateNoNative2H := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-2H-TOTALS",
+			SportID:            1,
+			Status:             FixtureStatusFT,
+			IsFinished:         true,
+			Score:              ScoreData{Home: 3, Away: 1},
+			PeriodScores: map[string]ScoreData{
+				"1H": {Home: 2, Away: 0},
+			},
+			ScoreConfirmedAt: now,
+		}
+		betTotals := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_TOTAL_GOALS",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "OVER",
+			Line:                floatPtr(1.5),
+			RuleVersion:         1,
+		}
+		res, err := Evaluate(stateNoNative2H, betTotals)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Status != BetStatusSettlementHold {
+			t.Errorf("expected BetStatusSettlementHold when native 2H score missing for FB_TOTAL_GOALS, got %s", res.Status)
+		}
+	})
+
+	// 9. All 2H markets are strictly SUSPENDED by capability gate (CanPlaceMarketCanonical returns false)
+	t.Run("All Second-Half markets are strictly SUSPENDED and non-bettable in capability gate", func(t *testing.T) {
+		reqs := []MarketPlacementRequest{
+			{SportID: 1, CanonicalMarketCode: "FB_2H_1X2", Period: PeriodSecondHalf},
+			{SportID: 1, CanonicalMarketCode: "FB_TOTAL_GOALS", Period: PeriodSecondHalf, Line: floatPtr(1.5)},
+		}
+		for _, req := range reqs {
+			allowed, reason := CanPlaceMarketCanonical(req)
+			if allowed {
+				t.Errorf("expected market %s (period %s) to be rejected by capability gate, but was allowed", req.CanonicalMarketCode, req.Period)
+			}
+			if !strings.Contains(reason, "2H") || !strings.Contains(reason, "suspended") {
+				t.Errorf("expected rejection reason containing '2H' and 'suspended', got '%s'", reason)
+			}
+		}
+	})
+}
+
 

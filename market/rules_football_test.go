@@ -1,0 +1,723 @@
+package market
+
+import (
+	"testing"
+	"time"
+)
+
+func TestPhase1ScoreDerivedSettlementRules(t *testing.T) {
+	now := time.Now()
+
+	// Finished match: FT 3-1, HT 2-0
+	ft3_1ht2_0State := CanonicalEventState{
+		CanonicalFixtureID: "SPD-FB-TEST-01",
+		SportID:            1,
+		Status:             FixtureStatusFT,
+		IsFinished:         true,
+		Score:              ScoreData{Home: 3, Away: 1}, // 2H was 1-1
+		PeriodScores: map[string]ScoreData{
+			"1H": {Home: 2, Away: 0},
+			"HT": {Home: 2, Away: 0},
+		},
+		IsPeriodFinished: map[string]bool{PeriodHalfTime: true, PeriodFullTime: true},
+		ScoreConfirmedAt: now,
+	}
+
+	tests := []struct {
+		name          string
+		state         CanonicalEventState
+		bet           BetSelection
+		expectStatus  string
+		expectFactor  float64
+		expectSettled bool
+	}{
+		// 1. FB_HT_BTTS: HT 2-0 -> BTTS NO Won, YES Lost
+		{
+			name:  "FB_HT_BTTS NO Won at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_BTTS",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "NO",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+		{
+			name:  "FB_HT_BTTS YES Lost at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_BTTS",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "YES",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusLost,
+			expectFactor:  0.0,
+			expectSettled: true,
+		},
+
+		// 2. FB_HT_DOUBLE_CHANCE: HT 2-0 -> 1X Won, 12 Won, X2 Lost
+		{
+			name:  "FB_HT_DOUBLE_CHANCE 1X Won at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_DOUBLE_CHANCE",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "1X",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+		{
+			name:  "FB_HT_DOUBLE_CHANCE X2 Lost at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_DOUBLE_CHANCE",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "X2",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusLost,
+			expectFactor:  0.0,
+			expectSettled: true,
+		},
+
+		// 3. FB_HT_DNB: HT 2-0 -> 1 Won, 2 Lost; Draw produces PUSH
+		{
+			name:  "FB_HT_DNB 1 Won at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_DNB",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "1",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+		{
+			name: "FB_HT_DNB Push at HT 1-1",
+			state: CanonicalEventState{
+				CanonicalFixtureID: "SPD-FB-TEST-DNB-DRAW",
+				SportID:            1,
+				Status:             FixtureStatusHT,
+				IsFinished:         false,
+				IsPeriodFinished:   map[string]bool{PeriodHalfTime: true},
+				PeriodScores:       map[string]ScoreData{"1H": {Home: 1, Away: 1}},
+			},
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_DNB",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "1",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusPush,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 4. FB_HT_ASIAN_HANDICAP: HT 2-0, Home (-0.5) Won
+		{
+			name:  "FB_HT_ASIAN_HANDICAP Home -0.5 Won at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_ASIAN_HANDICAP",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "1",
+				Line:                floatPtr(-0.5),
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 5. FB_HT_EUROPEAN_HCP: HT 2-0, European Handicap (0:1) Home Won (2+0 > 1)
+		{
+			name:  "FB_HT_EUROPEAN_HCP Home Won at HT 2-0 with -1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_EUROPEAN_HCP",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "1",
+				Line:                floatPtr(-1.0),
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 6. FB_HT_CORRECT_SCORE: HT 2-0
+		{
+			name:  "FB_HT_CORRECT_SCORE 2:0 Won",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_CORRECT_SCORE",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "2:0",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 7. FB_HT_CLEAN_SHEET: HT 2-0 -> Home Clean Sheet Won, Away Lost
+		{
+			name:  "FB_HT_CLEAN_SHEET Home Won at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_CLEAN_SHEET",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "HOME",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 8. FB_HT_WIN_TO_NIL: HT 2-0 -> Home Win To Nil Won
+		{
+			name:  "FB_HT_WIN_TO_NIL Home Won at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_WIN_TO_NIL",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "HOME",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 9. FB_HOME_TOTALS_HT: HT Home 2 goals -> Over 1.5 Won
+		{
+			name:  "FB_HOME_TOTALS_HT Over 1.5 Won at HT Home=2",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HOME_TOTALS_HT",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "OVER",
+				Line:                floatPtr(1.5),
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 10. FB_AWAY_TOTALS_HT: HT Away 0 goals -> Under 0.5 Won
+		{
+			name:  "FB_AWAY_TOTALS_HT Under 0.5 Won at HT Away=0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_AWAY_TOTALS_HT",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "UNDER",
+				Line:                floatPtr(0.5),
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 11. FB_EXACT_GOALS: FT 3-1 = 4 goals
+		{
+			name:  "FB_EXACT_GOALS 4 Won at FT 3-1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_EXACT_GOALS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "4",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 12. FB_EXACT_GOALS_HT: HT 2-0 = 2 goals
+		{
+			name:  "FB_EXACT_GOALS_HT 2 Won at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_EXACT_GOALS_HT",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "2",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 13. FB_GOAL_RANGE: FT 4 goals -> 4-6 Won, 2-3 Lost
+		{
+			name:  "FB_GOAL_RANGE 4-6 Won at FT 3-1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_GOAL_RANGE",
+				Period:              PeriodFullTime,
+				SelectionCode:       "4-6",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 14. FB_GOAL_RANGE_HT: HT 2 goals -> 2+ Won
+		{
+			name:  "FB_GOAL_RANGE_HT 2+ Won at HT 2-0",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_GOAL_RANGE_HT",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "2+",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 15. FB_HOME_EXACT_GOALS: FT Home = 3
+		{
+			name:  "FB_HOME_EXACT_GOALS 3 Won at Home=3",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HOME_EXACT_GOALS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "3",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 16. FB_AWAY_EXACT_GOALS: FT Away = 1
+		{
+			name:  "FB_AWAY_EXACT_GOALS 1 Won at Away=1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_AWAY_EXACT_GOALS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "1",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 17. FB_HOME_ODD_EVEN: FT Home 3 -> ODD Won
+		{
+			name:  "FB_HOME_ODD_EVEN ODD Won at Home=3",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HOME_ODD_EVEN",
+				Period:              PeriodFullTime,
+				SelectionCode:       "ODD",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 18. FB_AWAY_ODD_EVEN: FT Away 1 -> ODD Won
+		{
+			name:  "FB_AWAY_ODD_EVEN ODD Won at Away=1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_AWAY_ODD_EVEN",
+				Period:              PeriodFullTime,
+				SelectionCode:       "ODD",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 19. FB_HT_ODD_EVEN: HT total 2 -> EVEN Won
+		{
+			name:  "FB_HT_ODD_EVEN EVEN Won at HT total=2",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_ODD_EVEN",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "EVEN",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 20. FB_HIGHEST_SCORING_HALF: 1H had 2 goals, 2H had 2 goals (3-1 vs 2-0 -> 2H was 1-1 = 2 goals) -> EQUAL Won!
+		{
+			name:  "FB_HIGHEST_SCORING_HALF EQUAL Won when 1H=2 and 2H=2",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HIGHEST_SCORING_HALF",
+				Period:              PeriodFullTime,
+				SelectionCode:       "EQUAL",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 21. FB_HOME_HIGHEST_HALF: Home 1H=2, Home 2H=1 -> 1ST Won
+		{
+			name:  "FB_HOME_HIGHEST_HALF 1ST Won when Home 1H=2, 2H=1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HOME_HIGHEST_HALF",
+				Period:              PeriodFullTime,
+				SelectionCode:       "1ST",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 22. FB_AWAY_HIGHEST_HALF: Away 1H=0, Away 2H=1 -> 2ND Won
+		{
+			name:  "FB_AWAY_HIGHEST_HALF 2ND Won when Away 1H=0, 2H=1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_AWAY_HIGHEST_HALF",
+				Period:              PeriodFullTime,
+				SelectionCode:       "2ND",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 23. FB_WIN_BOTH_HALVES: 1H Home 2-0 (Home won), 2H 1-1 (Draw) -> Home did NOT win 2H -> Lost
+		{
+			name:  "FB_WIN_BOTH_HALVES HOME Lost when 2H is Draw",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_WIN_BOTH_HALVES",
+				Period:              PeriodFullTime,
+				SelectionCode:       "HOME",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusLost,
+			expectFactor:  0.0,
+			expectSettled: true,
+		},
+
+		// 24. FB_SCORE_BOTH_HALVES: Home scored 1H (2) and 2H (1) -> HOME Won
+		{
+			name:  "FB_SCORE_BOTH_HALVES HOME Won when Home scores in both halves",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_SCORE_BOTH_HALVES",
+				Period:              PeriodFullTime,
+				SelectionCode:       "HOME",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 25. FB_TO_WIN_EITHER_HALF: Home won 1H (2-0) -> HOME Won
+		{
+			name:  "FB_TO_WIN_EITHER_HALF HOME Won when Home wins 1H",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_TO_WIN_EITHER_HALF",
+				Period:              PeriodFullTime,
+				SelectionCode:       "HOME",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 26. FB_MULTI_GOALS: FT 3-1 = 4 goals -> 2-5 Won, 1-3 Lost
+		{
+			name:  "FB_MULTI_GOALS 2-5 Won at FT 4 goals",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_MULTI_GOALS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "2-5",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+		{
+			name:  "FB_MULTI_GOALS 1-3 Lost at FT 4 goals",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_MULTI_GOALS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "1-3",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusLost,
+			expectFactor:  0.0,
+			expectSettled: true,
+		},
+
+		// 27. FB_RESULT_BTTS: FT 3-1 (Home win & BTTS Yes) -> 1 & YES Won
+		{
+			name:  "FB_RESULT_BTTS 1 & YES Won at FT 3-1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_RESULT_BTTS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "1 & YES",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+		{
+			name:  "FB_RESULT_BTTS 1 & NO Lost at FT 3-1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_RESULT_BTTS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "1 & NO",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusLost,
+			expectFactor:  0.0,
+			expectSettled: true,
+		},
+
+		// 28. FB_RESULT_TOTALS: FT 3-1 (Home win & Over 2.5) -> 1 & OVER Won
+		{
+			name:  "FB_RESULT_TOTALS 1 & OVER 2.5 Won at FT 3-1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_RESULT_TOTALS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "1 & OVER",
+				Line:                floatPtr(2.5),
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// 29. FB_BTTS_TOTALS: FT 3-1 (BTTS Yes & Over 2.5) -> YES & OVER Won
+		{
+			name:  "FB_BTTS_TOTALS YES & OVER 2.5 Won at FT 3-1",
+			state: ft3_1ht2_0State,
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_BTTS_TOTALS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "YES & OVER",
+				Line:                floatPtr(2.5),
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusWon,
+			expectFactor:  1.0,
+			expectSettled: true,
+		},
+
+		// Edge case: Fail-Closed on missing 1H score for 1H-dependent market
+		{
+			name: "Fail-Closed: Missing 1H score holds settlement",
+			state: CanonicalEventState{
+				CanonicalFixtureID: "SPD-FB-NO-HT-SCORE",
+				SportID:            1,
+				Status:             FixtureStatusFT,
+				IsFinished:         true,
+				Score:              ScoreData{Home: 2, Away: 1},
+				PeriodScores:       map[string]ScoreData{}, // Empty HT score!
+			},
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_HT_BTTS",
+				Period:              PeriodHalfTime,
+				SelectionCode:       "YES",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusSettlementHold,
+			expectFactor:  0.0,
+			expectSettled: false,
+		},
+
+		// Edge case: Unfinished match returns BetStatusOpen
+		{
+			name: "Unfinished match returns BetStatusOpen for EventEnd market",
+			state: CanonicalEventState{
+				CanonicalFixtureID: "SPD-FB-LIVE",
+				SportID:            1,
+				Status:             FixtureStatusLive,
+				IsFinished:         false,
+				Score:              ScoreData{Home: 1, Away: 0},
+			},
+			bet: BetSelection{
+				SportID:             1,
+				CanonicalMarketCode: "FB_EXACT_GOALS",
+				Period:              PeriodFullTime,
+				SelectionCode:       "2",
+				RuleVersion:         1,
+			},
+			expectStatus:  BetStatusOpen,
+			expectFactor:  0.0,
+			expectSettled: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := Evaluate(tc.state, tc.bet)
+			if err != nil {
+				t.Fatalf("Evaluate returned unexpected error: %v", err)
+			}
+			if res.Status != tc.expectStatus {
+				t.Errorf("expected status %s, got %s (reason: %s)", tc.expectStatus, res.Status, res.Reason)
+			}
+			if res.Settled != tc.expectSettled {
+				t.Errorf("expected settled %v, got %v", tc.expectSettled, res.Settled)
+			}
+			if res.PayoutFactor != tc.expectFactor {
+				t.Errorf("expected factor %.2f, got %.2f", tc.expectFactor, res.PayoutFactor)
+			}
+		})
+	}
+}
+
+func TestPhase1ProviderMappingCoverage(t *testing.T) {
+	// Verify that incoming raw SportyBet market payloads map cleanly to the 29 new contracts
+	testMappings := []struct {
+		desc           string
+		rawMarketName  string
+		rawMarketType  string
+		specifier      string
+		rawOutcomeName string
+		line           *float64
+		expectCode     string
+		expectPeriod   string
+		expectActive   bool
+	}{
+		{desc: "1st Half - BTTS", rawMarketName: "1st Half - Both Teams to Score", rawOutcomeName: "Yes", expectCode: "FB_HT_BTTS", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - Double Chance", rawMarketName: "1st Half - Double Chance", rawOutcomeName: "1X", expectCode: "FB_HT_DOUBLE_CHANCE", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - Draw No Bet", rawMarketName: "1st Half - Draw No Bet", rawOutcomeName: "1", expectCode: "FB_HT_DNB", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - Asian Handicap", rawMarketName: "1st Half - Asian Handicap", specifier: "hcp=-0.5", rawOutcomeName: "1", line: floatPtr(-0.5), expectCode: "FB_HT_ASIAN_HANDICAP", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - European Handicap", rawMarketName: "1st Half - Handicap", specifier: "hcp=-1", rawOutcomeName: "1", line: floatPtr(-1.0), expectCode: "FB_HT_EUROPEAN_HCP", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - Correct Score", rawMarketName: "1st Half - Correct Score", rawOutcomeName: "1:0", expectCode: "FB_HT_CORRECT_SCORE", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - Clean Sheet", rawMarketName: "1st Half - Clean Sheet", rawOutcomeName: "Home", expectCode: "FB_HT_CLEAN_SHEET", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - Win to Nil", rawMarketName: "1st Half - Win to Nil", rawOutcomeName: "Home", expectCode: "FB_HT_WIN_TO_NIL", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - Home Total Goals", rawMarketName: "1st Half - Home Total Goals", specifier: "total=0.5", rawOutcomeName: "Over 0.5", line: floatPtr(0.5), expectCode: "FB_HOME_TOTALS_HT", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "1st Half - Away Total Goals", rawMarketName: "1st Half - Away Total Goals", specifier: "total=0.5", rawOutcomeName: "Under 0.5", line: floatPtr(0.5), expectCode: "FB_AWAY_TOTALS_HT", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "Exact Goals", rawMarketName: "Exact Goals", rawOutcomeName: "2", expectCode: "FB_EXACT_GOALS", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "1st Half - Exact Goals", rawMarketName: "1st Half - Exact Goals", rawOutcomeName: "1", expectCode: "FB_EXACT_GOALS_HT", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "Goal Range", rawMarketName: "Goal Range", rawOutcomeName: "2-3", expectCode: "FB_GOAL_RANGE", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "1st Half - Goal Range", rawMarketName: "1st Half - Goal Range", rawOutcomeName: "0-1", expectCode: "FB_GOAL_RANGE_HT", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "Home Exact Goals", rawMarketName: "Home Exact Goals", rawOutcomeName: "1", expectCode: "FB_HOME_EXACT_GOALS", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Away Exact Goals", rawMarketName: "Away Exact Goals", rawOutcomeName: "0", expectCode: "FB_AWAY_EXACT_GOALS", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Home Odd/Even", rawMarketName: "Home Odd/Even", rawOutcomeName: "Odd", expectCode: "FB_HOME_ODD_EVEN", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Away Odd/Even", rawMarketName: "Away Odd/Even", rawOutcomeName: "Even", expectCode: "FB_AWAY_ODD_EVEN", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "1st Half - Odd/Even", rawMarketName: "1st Half - Odd/Even", rawOutcomeName: "Odd", expectCode: "FB_HT_ODD_EVEN", expectPeriod: PeriodHalfTime, expectActive: true},
+		{desc: "Highest Scoring Half", rawMarketName: "Highest Scoring Half", rawOutcomeName: "2nd", expectCode: "FB_HIGHEST_SCORING_HALF", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Home Highest Scoring Half", rawMarketName: "Home Highest Scoring Half", rawOutcomeName: "1st", expectCode: "FB_HOME_HIGHEST_HALF", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Away Highest Scoring Half", rawMarketName: "Away Highest Scoring Half", rawOutcomeName: "2nd", expectCode: "FB_AWAY_HIGHEST_HALF", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Win Both Halves", rawMarketName: "Win Both Halves", rawOutcomeName: "Home", expectCode: "FB_WIN_BOTH_HALVES", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Score in Both Halves", rawMarketName: "Score in Both Halves", rawOutcomeName: "Home", expectCode: "FB_SCORE_BOTH_HALVES", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "To Win Either Half", rawMarketName: "To Win Either Half", rawOutcomeName: "Home", expectCode: "FB_TO_WIN_EITHER_HALF", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Multi Goals", rawMarketName: "Multi Goals", rawOutcomeName: "2-4", expectCode: "FB_MULTI_GOALS", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "1X2 and Both Teams to Score", rawMarketName: "1X2 & Both Teams to Score", rawOutcomeName: "1 & Yes", expectCode: "FB_RESULT_BTTS", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "1X2 and Over/Under", rawMarketName: "1X2 & Over/Under 2.5", specifier: "total=2.5", rawOutcomeName: "1 & Over", line: floatPtr(2.5), expectCode: "FB_RESULT_TOTALS", expectPeriod: PeriodFullTime, expectActive: true},
+		{desc: "Both Teams to Score and Over/Under", rawMarketName: "Both Teams to Score & Over/Under 2.5", specifier: "total=2.5", rawOutcomeName: "Yes & Over", line: floatPtr(2.5), expectCode: "FB_BTTS_TOTALS", expectPeriod: PeriodFullTime, expectActive: true},
+	}
+
+	for _, tm := range testMappings {
+		t.Run(tm.desc, func(t *testing.T) {
+			res := MapProviderMarket(ProviderMarketInput{
+				Provider:       ProviderSportyBet,
+				SportID:        1,
+				RawMarketName:  tm.rawMarketName,
+				RawMarketType:  tm.rawMarketType,
+				RawSpecifier:   tm.specifier,
+				RawOutcomeName: tm.rawOutcomeName,
+				Line:           tm.line,
+			})
+
+			if !res.Mapped {
+				t.Fatalf("expected market to be mapped, got unmapped: %s", res.Reason)
+			}
+			if !res.HasRule {
+				t.Fatalf("expected market to have rule registered, but none found: %s", res.Reason)
+			}
+			if res.CanonicalMarketCode != tm.expectCode {
+				t.Errorf("expected canonical code %s, got %s", tm.expectCode, res.CanonicalMarketCode)
+			}
+			if res.Period != tm.expectPeriod {
+				t.Errorf("expected period %s, got %s", tm.expectPeriod, res.Period)
+			}
+			if tm.expectActive && res.Status != MarketStatusActive {
+				t.Errorf("expected ACTIVE status, got %s (reason: %s)", res.Status, res.Reason)
+			}
+		})
+	}
+}
+
+func floatPtr(v float64) *float64 {
+	return &v
+}

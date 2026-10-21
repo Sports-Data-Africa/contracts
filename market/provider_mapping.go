@@ -275,6 +275,139 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 	switch sportID {
 	case 1: // Football
 		switch {
+		// 1. Combo Markets
+		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2") || rawID == "1") &&
+			(strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "btts") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "gg")):
+			return "FB_RESULT_BTTS", PeriodFullTime, rawSel
+		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2") || rawID == "1") &&
+			(strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "totals")):
+			return "FB_RESULT_TOTALS", PeriodFullTime, rawSel
+		case (strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "btts") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "gg")) &&
+			(strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "totals")):
+			return "FB_BTTS_TOTALS", PeriodFullTime, rawSel
+
+		// 2. Double Chance
+		case rawID == "10" || strings.Contains(normDesc, "double chance"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_DOUBLE_CHANCE", PeriodHalfTime, normalizeDoubleChance(rawSel)
+			}
+			return "FB_DOUBLE_CHANCE", PeriodFullTime, normalizeDoubleChance(rawSel)
+
+		// 3. Draw No Bet
+		case rawID == "60" || strings.Contains(normDesc, "draw no bet") || strings.Contains(normDesc, "dnb"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_DNB", PeriodHalfTime, normSel
+			}
+			return "FB_DNB", PeriodFullTime, normSel
+
+		// 4. Halves Progression & Comparison
+		case strings.Contains(normDesc, "highest scoring half") || strings.Contains(normDesc, "half with most goals"):
+			if strings.Contains(normDesc, "home") || strings.Contains(normDesc, "team 1") {
+				return "FB_HOME_HIGHEST_HALF", PeriodFullTime, rawSel
+			}
+			if strings.Contains(normDesc, "away") || strings.Contains(normDesc, "team 2") {
+				return "FB_AWAY_HIGHEST_HALF", PeriodFullTime, rawSel
+			}
+			return "FB_HIGHEST_SCORING_HALF", PeriodFullTime, rawSel
+		case strings.Contains(normDesc, "win both halves") || strings.Contains(normDesc, "to win both halves"):
+			return "FB_WIN_BOTH_HALVES", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "score in both halves") || strings.Contains(normDesc, "to score in both halves"):
+			return "FB_SCORE_BOTH_HALVES", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "win either half") || strings.Contains(normDesc, "to win either half"):
+			return "FB_TO_WIN_EITHER_HALF", PeriodFullTime, normSel
+
+		// 5. Multi Goals
+		case strings.Contains(normDesc, "multi goals") || strings.Contains(normDesc, "multi-goals") || strings.Contains(normDesc, "multi goal"):
+			return "FB_MULTI_GOALS", PeriodFullTime, rawSel
+
+		// 6. Goal Range
+		case strings.Contains(normDesc, "goal range") || strings.Contains(normDesc, "goal band") || strings.Contains(normDesc, "number of goals"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_GOAL_RANGE_HT", PeriodHalfTime, rawSel
+			}
+			return "FB_GOAL_RANGE", PeriodFullTime, rawSel
+
+		// 7. Exact Goals
+		case strings.Contains(normDesc, "exact goal") || strings.Contains(normDesc, "exact goals") || strings.Contains(normDesc, "total goals exact"):
+			if strings.Contains(normDesc, "home") || strings.Contains(normDesc, "team 1") {
+				return "FB_HOME_EXACT_GOALS", PeriodFullTime, rawSel
+			}
+			if strings.Contains(normDesc, "away") || strings.Contains(normDesc, "team 2") {
+				return "FB_AWAY_EXACT_GOALS", PeriodFullTime, rawSel
+			}
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_EXACT_GOALS_HT", PeriodHalfTime, rawSel
+			}
+			return "FB_EXACT_GOALS", PeriodFullTime, rawSel
+
+		// 8. BTTS
+		case rawID == "29" || strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "btts"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_BTTS", PeriodHalfTime, normalizeYesNo(rawSel)
+			}
+			return "FB_BTTS", PeriodFullTime, normalizeYesNo(rawSel)
+
+		// 9. Clean Sheet
+		case strings.Contains(normDesc, "clean sheet"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_CLEAN_SHEET", PeriodHalfTime, normSel
+			}
+			return "FB_CLEAN_SHEET", PeriodFullTime, normSel
+
+		// 10. Win To Nil
+		case strings.Contains(normDesc, "win to nil"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_WIN_TO_NIL", PeriodHalfTime, normSel
+			}
+			return "FB_WIN_TO_NIL", PeriodFullTime, normSel
+
+		// 11. Odd/Even
+		case rawID == "20" || strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+			if strings.Contains(normDesc, "home") || strings.Contains(normDesc, "team 1") {
+				return "FB_HOME_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
+			}
+			if strings.Contains(normDesc, "away") || strings.Contains(normDesc, "team 2") {
+				return "FB_AWAY_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
+			}
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_ODD_EVEN", PeriodHalfTime, normalizeOddEven(rawSel)
+			}
+			return "FB_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
+
+		// 12. Correct Score
+		case rawID == "7" || strings.Contains(normDesc, "correct score"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_CORRECT_SCORE", PeriodHalfTime, rawSel
+			}
+			return "FB_CORRECT_SCORE", PeriodFullTime, rawSel
+
+		// 13. Team Totals
+		case strings.Contains(normDesc, "home total") || strings.Contains(normDesc, "team 1 total"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HOME_TOTALS_HT", PeriodHalfTime, normalizeOverUnder(rawSel)
+			}
+			return "FB_HOME_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+		case strings.Contains(normDesc, "away total") || strings.Contains(normDesc, "team 2 total"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_AWAY_TOTALS_HT", PeriodHalfTime, normalizeOverUnder(rawSel)
+			}
+			return "FB_AWAY_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+
+		// 14. Handicaps
+		case rawID == "16" || strings.Contains(normDesc, "asian handicap"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_ASIAN_HANDICAP", PeriodHalfTime, normSel
+			}
+			return "FB_ASIAN_HANDICAP", PeriodFullTime, normSel
+		case (rawID == "14" || strings.Contains(normDesc, "handicap") || strings.Contains(normDesc, "european handicap")) &&
+			!strings.Contains(normDesc, "asian") && !strings.Contains(normDesc, "corner") && !strings.Contains(normDesc, "card") &&
+			!strings.Contains(normDesc, "prop"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_EUROPEAN_HCP", PeriodHalfTime, normSel
+			}
+			return "FB_EUROPEAN_HANDICAP", PeriodFullTime, normSel
+
+		// 15. Generic 1X2
 		case rawID == "1" || rawID == "FB_1X2" || strings.Contains(normDesc, "1x2") || strings.Contains(normDesc, "3 way result") || strings.Contains(normDesc, "match result"):
 			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "1st_half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "first_half") || strings.Contains(normDesc, "ht") {
 				return "FB_HT_1X2", PeriodHalfTime, normSel
@@ -283,6 +416,8 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 				return "FB_2H_1X2", PeriodSecondHalf, normSel
 			}
 			return "FB_1X2", PeriodFullTime, normSel
+
+		// 16. Generic Total Goals
 		case (rawID == "18" || rawID == "FB_TOTAL_GOALS" || strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "over_under") || strings.Contains(normDesc, "over under") || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "total_goals") || strings.Contains(normDesc, "totals") || strings.Contains(normDesc, "total")) &&
 			!strings.Contains(normDesc, "corner") && !strings.Contains(normDesc, "card") && !strings.Contains(normDesc, "throw") &&
 			!strings.Contains(normDesc, "offside") && !strings.Contains(normDesc, "foul") && !strings.Contains(normDesc, "booking"):
@@ -293,32 +428,12 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 				return "FB_TOTAL_GOALS", PeriodSecondHalf, normalizeOverUnder(rawSel)
 			}
 			return "FB_TOTAL_GOALS", PeriodFullTime, normalizeOverUnder(rawSel)
-		case rawID == "29" || strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "btts"):
-			return "FB_BTTS", PeriodFullTime, normalizeYesNo(rawSel)
-		case rawID == "10" || strings.Contains(normDesc, "double chance"):
-			return "FB_DOUBLE_CHANCE", PeriodFullTime, normalizeDoubleChance(rawSel)
-		case rawID == "60" || strings.Contains(normDesc, "draw no bet") || strings.Contains(normDesc, "dnb"):
-			return "FB_DNB", PeriodFullTime, normSel
-		case rawID == "16" || strings.Contains(normDesc, "asian handicap"):
-			return "FB_ASIAN_HANDICAP", PeriodFullTime, normSel
-		case (rawID == "14" || strings.Contains(normDesc, "handicap") || strings.Contains(normDesc, "european handicap")) &&
-			!strings.Contains(normDesc, "asian") && !strings.Contains(normDesc, "corner") && !strings.Contains(normDesc, "card") &&
-			!strings.Contains(normDesc, "prop"):
-			return "FB_EUROPEAN_HANDICAP", PeriodFullTime, normSel
-		case rawID == "7" || strings.Contains(normDesc, "correct score"):
-			return "FB_CORRECT_SCORE", PeriodFullTime, rawSel
+
+		// 17. HT/FT
 		case strings.Contains(normDesc, "ht/ft") || strings.Contains(normDesc, "half time/full time"):
 			return "FB_HT_FT", PeriodFullTime, rawSel
-		case rawID == "20" || strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
-			return "FB_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
-		case strings.Contains(normDesc, "clean sheet"):
-			return "FB_CLEAN_SHEET", PeriodFullTime, normSel
-		case strings.Contains(normDesc, "win to nil"):
-			return "FB_WIN_TO_NIL", PeriodFullTime, normSel
-		case strings.Contains(normDesc, "home total") || strings.Contains(normDesc, "team 1 total"):
-			return "FB_HOME_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
-		case strings.Contains(normDesc, "away total") || strings.Contains(normDesc, "team 2 total"):
-			return "FB_AWAY_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+
+		// 18. Corners & Cards
 		case strings.Contains(normDesc, "corner") && (strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "total")):
 			return "FB_CORNERS_TOTAL", PeriodFullTime, normalizeOverUnder(rawSel)
 		case strings.Contains(normDesc, "corner") && strings.Contains(normDesc, "1x2"):
@@ -536,27 +651,98 @@ func mapOdibets(sportID int, rawID, normDesc, rawSel string) (string, string, st
 	switch sportID {
 	case 1: // Football
 		switch {
+		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2") || rawID == "1") &&
+			(strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "btts") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "gg")):
+			return "FB_RESULT_BTTS", PeriodFullTime, rawSel
+		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2") || rawID == "1") &&
+			(strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "totals")):
+			return "FB_RESULT_TOTALS", PeriodFullTime, rawSel
+		case (strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "btts") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "gg")) &&
+			(strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "totals")):
+			return "FB_BTTS_TOTALS", PeriodFullTime, rawSel
 		case rawID == "1" || rawID == "FB_1X2" || strings.Contains(normDesc, "1x2") || strings.Contains(normDesc, "three way") || strings.Contains(normDesc, "match result"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_1X2", PeriodHalfTime, normSel
+			}
 			return "FB_1X2", PeriodFullTime, normSel
 		case (rawID == "18" || rawID == "FB_TOTAL_GOALS" || strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "totals") || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "total")) &&
 			!strings.Contains(normDesc, "corner") && !strings.Contains(normDesc, "card") && !strings.Contains(normDesc, "throw") &&
 			!strings.Contains(normDesc, "offside") && !strings.Contains(normDesc, "foul") && !strings.Contains(normDesc, "booking"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_TOTAL_GOALS", PeriodHalfTime, normalizeOverUnder(rawSel)
+			}
 			return "FB_TOTAL_GOALS", PeriodFullTime, normalizeOverUnder(rawSel)
 		case strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "both teams to score") || normDesc == "gg" || normDesc == "btts":
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_BTTS", PeriodHalfTime, normalizeYesNo(rawSel)
+			}
 			return "FB_BTTS", PeriodFullTime, normalizeYesNo(rawSel)
 		case strings.Contains(normDesc, "double chance"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_DOUBLE_CHANCE", PeriodHalfTime, normalizeDoubleChance(rawSel)
+			}
 			return "FB_DOUBLE_CHANCE", PeriodFullTime, normalizeDoubleChance(rawSel)
 		case strings.Contains(normDesc, "draw no bet") || strings.Contains(normDesc, "dnb"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_DNB", PeriodHalfTime, normSel
+			}
 			return "FB_DNB", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "handicap") && !strings.Contains(normDesc, "corner") && !strings.Contains(normDesc, "card") && !strings.Contains(normDesc, "prop"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_ASIAN_HANDICAP", PeriodHalfTime, normSel
+			}
 			return "FB_ASIAN_HANDICAP", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "correct score"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_CORRECT_SCORE", PeriodHalfTime, rawSel
+			}
 			return "FB_CORRECT_SCORE", PeriodFullTime, rawSel
-		case strings.Contains(normDesc, "half time 1x2") || strings.Contains(normDesc, "1st half 1x2"):
-			return "FB_HT_1X2", PeriodHalfTime, normSel
-		case strings.Contains(normDesc, "half time total") || strings.Contains(normDesc, "1st half total"):
-			return "FB_TOTAL_GOALS", PeriodHalfTime, normalizeOverUnder(rawSel)
-		case strings.Contains(normDesc, "odd/even"):
+		case strings.Contains(normDesc, "clean sheet"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_CLEAN_SHEET", PeriodHalfTime, normSel
+			}
+			return "FB_CLEAN_SHEET", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "win to nil"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_WIN_TO_NIL", PeriodHalfTime, normSel
+			}
+			return "FB_WIN_TO_NIL", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "exact goal") || strings.Contains(normDesc, "exact goals"):
+			if strings.Contains(normDesc, "home") {
+				return "FB_HOME_EXACT_GOALS", PeriodFullTime, rawSel
+			}
+			if strings.Contains(normDesc, "away") {
+				return "FB_AWAY_EXACT_GOALS", PeriodFullTime, rawSel
+			}
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_EXACT_GOALS_HT", PeriodHalfTime, rawSel
+			}
+			return "FB_EXACT_GOALS", PeriodFullTime, rawSel
+		case strings.Contains(normDesc, "goal range") || strings.Contains(normDesc, "goal band"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_GOAL_RANGE_HT", PeriodHalfTime, rawSel
+			}
+			return "FB_GOAL_RANGE", PeriodFullTime, rawSel
+		case strings.Contains(normDesc, "multi goals") || strings.Contains(normDesc, "multi-goals"):
+			return "FB_MULTI_GOALS", PeriodFullTime, rawSel
+		case strings.Contains(normDesc, "highest scoring half"):
+			return "FB_HIGHEST_SCORING_HALF", PeriodFullTime, rawSel
+		case strings.Contains(normDesc, "win both halves"):
+			return "FB_WIN_BOTH_HALVES", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "score in both halves"):
+			return "FB_SCORE_BOTH_HALVES", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "win either half"):
+			return "FB_TO_WIN_EITHER_HALF", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+			if strings.Contains(normDesc, "home") {
+				return "FB_HOME_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
+			}
+			if strings.Contains(normDesc, "away") {
+				return "FB_AWAY_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
+			}
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "half time") || strings.Contains(normDesc, "ht") {
+				return "FB_HT_ODD_EVEN", PeriodHalfTime, normalizeOddEven(rawSel)
+			}
 			return "FB_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
 

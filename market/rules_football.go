@@ -78,12 +78,19 @@ func (r *Football1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection) 
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
-	h, a := state.Score.Home, state.Score.Away
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	is1 := sel == "1" || sel == "HOME"
+	isX := sel == "X" || sel == "DRAW"
+	is2 := sel == "2" || sel == "AWAY"
+	if !is1 && !isX && !is2 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for 1X2", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
 
-	won := (sel == "1" || sel == "HOME") && h > a ||
-		(sel == "X" || sel == "DRAW") && h == a ||
-		(sel == "2" || sel == "AWAY") && a > h
+	h, a := state.Score.Home, state.Score.Away
+	won := is1 && h > a || isX && h == a || is2 && a > h
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
@@ -153,11 +160,35 @@ func (r *FootballTotalGoalsRule) Evaluate(state CanonicalEventState, bet BetSele
 		periodDone = state.IsFinished
 	}
 
-	line := 2.5
-	if bet.Line != nil {
-		line = *bet.Line
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{
+			Status:         BetStatusSettlementHold,
+			Settled:        false,
+			Reason:         "Negative score data detected",
+			Timing:         r.Timing(),
+			RequiredDomain: r.RequiredDomain(),
+		}
 	}
+	if bet.Line == nil {
+		return SettlementResult{
+			Status:         BetStatusSettlementHold,
+			Settled:        false,
+			Reason:         "Missing required line specifier for Total Goals",
+			Timing:         r.Timing(),
+			RequiredDomain: r.RequiredDomain(),
+		}
+	}
+	line := *bet.Line
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel != "OVER" && sel != "UNDER" {
+		return SettlementResult{
+			Status:         BetStatusSettlementHold,
+			Settled:        false,
+			Reason:         fmt.Sprintf("Unsupported selection code '%s' for Total Goals", bet.SelectionCode),
+			Timing:         r.Timing(),
+			RequiredDomain: r.RequiredDomain(),
+		}
+	}
 
 	// 1. Instant Irreversible checks
 	switch sel {
@@ -224,14 +255,22 @@ func (r *FootballBTTSRule) RequiredDomain() string { return DomainScore }
 func (r *FootballBTTSRule) Timing() string         { return TimingInstantIrreversible }
 
 func (r *FootballBTTSRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
-	h, a := state.Score.Home, state.Score.Away
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isYes := sel == "YES" || sel == "GG"
+	isNo := sel == "NO" || sel == "NG"
+	if !isYes && !isNo {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for BTTS", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
 
+	h, a := state.Score.Home, state.Score.Away
 	bothScored := h >= 1 && a >= 1
 
 	// Instant Irreversible resolution
 	if bothScored {
-		if sel == "YES" || sel == "GG" {
+		if isYes {
 			return SettlementResult{
 				Status:         BetStatusWon,
 				PayoutFactor:   1.0,
@@ -242,7 +281,7 @@ func (r *FootballBTTSRule) Evaluate(state CanonicalEventState, bet BetSelection)
 				EvaluatedAt:    time.Now(),
 			}
 		}
-		if sel == "NO" || sel == "NG" {
+		if isNo {
 			return SettlementResult{
 				Status:         BetStatusLost,
 				PayoutFactor:   0.0,
@@ -257,7 +296,7 @@ func (r *FootballBTTSRule) Evaluate(state CanonicalEventState, bet BetSelection)
 
 	// At match end: if not both scored
 	if state.IsFinished {
-		if sel == "NO" || sel == "NG" {
+		if isNo {
 			return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 		}
 		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
@@ -281,9 +320,15 @@ func (r *FootballDoubleChanceRule) Evaluate(state CanonicalEventState, bet BetSe
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
-	h, a := state.Score.Home, state.Score.Away
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel != "1X" && sel != "12" && sel != "X2" {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Double Chance", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
 
+	h, a := state.Score.Home, state.Score.Away
 	won := (sel == "1X" && h >= a) ||
 		(sel == "12" && h != a) ||
 		(sel == "X2" && a >= h)
@@ -309,13 +354,21 @@ func (r *FootballDrawNoBetRule) Evaluate(state CanonicalEventState, bet BetSelec
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
-	h, a := state.Score.Home, state.Score.Away
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	is1 := sel == "1" || sel == "HOME"
+	is2 := sel == "2" || sel == "AWAY"
+	if !is1 && !is2 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Draw No Bet", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
 
+	h, a := state.Score.Home, state.Score.Away
 	if h == a {
 		return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, Reason: "Match ended in a draw (DNB push)", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 	}
-	if (sel == "1" || sel == "HOME") && h > a || (sel == "2" || sel == "AWAY") && a > h {
+	if is1 && h > a || is2 && a > h {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 	}
 	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
@@ -336,6 +389,17 @@ func (r *FootballAsianHandicapRule) Evaluate(state CanonicalEventState, bet BetS
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
+	if bet.LineQuarters == nil && bet.Line == nil {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing required line specifier for Asian Handicap", RequiredDomain: DomainScore}
+	}
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel != "1" && sel != "HOME" && sel != "2" && sel != "AWAY" {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Asian Handicap", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
+
 	lineQuarters := 0
 	if bet.LineQuarters != nil {
 		lineQuarters = *bet.LineQuarters
@@ -385,11 +449,18 @@ func (r *FootballEuropeanHandicapRule) Evaluate(state CanonicalEventState, bet B
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
-	handicap := 0
-	if bet.Line != nil {
-		handicap = int(*bet.Line)
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
+	if bet.Line == nil {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing required line specifier for European Handicap", RequiredDomain: DomainScore}
 	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel != "1" && sel != "HOME" && sel != "X" && sel != "DRAW" && sel != "2" && sel != "AWAY" {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for European Handicap", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
+
+	handicap := int(*bet.Line)
 	adjHome := state.Score.Home + handicap
 	away := state.Score.Away
 
@@ -417,6 +488,9 @@ func (r *FootballCorrectScoreRule) Timing() string         { return TimingEventE
 func (r *FootballCorrectScoreRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
 	}
 	targetScore := strings.TrimSpace(bet.SelectionCode)
 	actualScore := fmt.Sprintf("%d:%d", state.Score.Home, state.Score.Away)
@@ -449,13 +523,20 @@ func (r *FootballHT1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection
 	if !ok || !isHTDone {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore}
 	}
+	if htScore.Home < 0 || htScore.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
 
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
-	h, a := htScore.Home, htScore.Away
+	is1 := sel == "1" || sel == "HOME"
+	isX := sel == "X" || sel == "DRAW"
+	is2 := sel == "2" || sel == "AWAY"
+	if !is1 && !isX && !is2 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for HT 1X2", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
 
-	won := (sel == "1" || sel == "HOME") && h > a ||
-		(sel == "X" || sel == "DRAW") && h == a ||
-		(sel == "2" || sel == "AWAY") && a > h
+	h, a := htScore.Home, htScore.Away
+	won := is1 && h > a || isX && h == a || is2 && a > h
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
@@ -478,6 +559,9 @@ func (r *Football2H1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
 	h2, ok := state.PeriodScores["2H"]
 	if !ok {
 		ht, okHT := state.PeriodScores["1H"]
@@ -485,16 +569,29 @@ func (r *Football2H1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection
 			ht, okHT = state.PeriodScores["HT"]
 		}
 		if okHT {
+			if state.Score.Home < ht.Home || state.Score.Away < ht.Away {
+				return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Inconsistent score data: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
+			}
 			h2 = ScoreData{Home: state.Score.Home - ht.Home, Away: state.Score.Away - ht.Away}
 		} else {
-			return SettlementResult{Status: BetStatusManualReview, Settled: false, Reason: "Missing 1H score to derive 2H result", RequiredDomain: DomainPeriodScore}
+			return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score to derive 2H result", RequiredDomain: DomainPeriodScore}
 		}
+	}
+	if h2.Home < 0 || h2.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative 2H score data detected", RequiredDomain: DomainPeriodScore}
 	}
 
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
-	won := (sel == "1" || sel == "HOME") && h2.Home > h2.Away ||
-		(sel == "X" || sel == "DRAW") && h2.Home == h2.Away ||
-		(sel == "2" || sel == "AWAY") && h2.Away > h2.Home
+	is1 := sel == "1" || sel == "HOME"
+	isX := sel == "X" || sel == "DRAW"
+	is2 := sel == "2" || sel == "AWAY"
+	if !is1 && !isX && !is2 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for 2H 1X2", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
+
+	won := is1 && h2.Home > h2.Away ||
+		isX && h2.Home == h2.Away ||
+		is2 && h2.Away > h2.Home
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
@@ -517,12 +614,18 @@ func (r *FootballHTFTRule) Evaluate(state CanonicalEventState, bet BetSelection)
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainPeriodScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
 	ht, ok := state.PeriodScores["1H"]
 	if !ok {
 		ht, ok = state.PeriodScores["HT"]
 	}
 	if !ok {
-		return SettlementResult{Status: BetStatusManualReview, Settled: false, Reason: "Missing HT score for HT/FT settlement", RequiredDomain: DomainPeriodScore}
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing HT score for HT/FT settlement", RequiredDomain: DomainPeriodScore}
+	}
+	if ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative HT score data detected", RequiredDomain: DomainPeriodScore}
 	}
 
 	htOutcome := "X"
@@ -564,8 +667,14 @@ func (r *FootballOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelecti
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	total := state.Score.Home + state.Score.Away
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel != "ODD" && sel != "EVEN" {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Odd/Even", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
 
 	isOdd := total%2 != 0
 	won := (sel == "ODD" && isOdd) || (sel == "EVEN" && !isOdd)
@@ -588,8 +697,15 @@ func (r *FootballCleanSheetRule) RequiredDomain() string { return DomainScore }
 func (r *FootballCleanSheetRule) Timing() string         { return TimingInstantIrreversible }
 
 func (r *FootballCleanSheetRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
-	isHomeCleanSheet := strings.Contains(sel, "HOME") || sel == "1" || sel == "YES"
+	isHomeCleanSheet := strings.Contains(sel, "HOME") || sel == "1"
+	isAwayCleanSheet := strings.Contains(sel, "AWAY") || sel == "2"
+	if !isHomeCleanSheet && !isAwayCleanSheet {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Clean Sheet", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
 
 	if isHomeCleanSheet {
 		// Home clean sheet means Away scores 0. If Away scores >= 1, clean sheet is instantly LOST!
@@ -599,7 +715,7 @@ func (r *FootballCleanSheetRule) Evaluate(state CanonicalEventState, bet BetSele
 		if state.IsFinished {
 			return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 		}
-	} else {
+	} else if isAwayCleanSheet {
 		// Away clean sheet: Home scores 0. If Home scores >= 1, clean sheet is instantly LOST!
 		if state.Score.Home >= 1 {
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, Reason: "Home team scored, clean sheet lost", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
@@ -624,8 +740,15 @@ func (r *FootballWinToNilRule) RequiredDomain() string { return DomainScore }
 func (r *FootballWinToNilRule) Timing() string         { return TimingInstantIrreversible }
 
 func (r *FootballWinToNilRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
 	isHome := sel == "1" || strings.Contains(sel, "HOME")
+	isAway := sel == "2" || strings.Contains(sel, "AWAY")
+	if !isHome && !isAway {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Win To Nil", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
 
 	if isHome {
 		// If Away scores, Home cannot Win to Nil -> Instant LOSS
@@ -638,7 +761,7 @@ func (r *FootballWinToNilRule) Evaluate(state CanonicalEventState, bet BetSelect
 			}
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 		}
-	} else {
+	} else if isAway {
 		// Away win to nil: If Home scores, Away cannot Win to Nil -> Instant LOSS
 		if state.Score.Home >= 1 {
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, Reason: "Opponent scored, Win To Nil lost", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
@@ -716,11 +839,17 @@ func (r *FootballTeamTotalsRule) Evaluate(state CanonicalEventState, bet BetSele
 		}
 	}
 
-	line := 1.5
-	if bet.Line != nil {
-		line = *bet.Line
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: r.RequiredDomain()}
 	}
+	if bet.Line == nil {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing required line specifier for Team Totals", RequiredDomain: r.RequiredDomain()}
+	}
+	line := *bet.Line
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel != "OVER" && sel != "UNDER" {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Team Totals", bet.SelectionCode), RequiredDomain: r.RequiredDomain()}
+	}
 
 	switch sel {
 	case "OVER":
@@ -1031,6 +1160,16 @@ func (r *FootballHTAsianHandicapRule) Evaluate(state CanonicalEventState, bet Be
 	if !ok {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score for HT Asian Handicap settlement", RequiredDomain: DomainPeriodScore}
 	}
+	if ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
+	if bet.LineQuarters == nil && bet.Line == nil {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing required line specifier for 1st Half Asian Handicap", RequiredDomain: DomainPeriodScore}
+	}
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel != "1" && sel != "HOME" && sel != "2" && sel != "AWAY" {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for 1st Half Asian Handicap", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
 
 	lineQuarters := 0
 	if bet.LineQuarters != nil {
@@ -1088,12 +1227,18 @@ func (r *FootballHTEuropeanHandicapRule) Evaluate(state CanonicalEventState, bet
 	if !ok {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score for HT European Handicap settlement", RequiredDomain: DomainPeriodScore}
 	}
-
-	handicap := 0
-	if bet.Line != nil {
-		handicap = int(*bet.Line)
+	if ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
+	if bet.Line == nil {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing required line specifier for 1st Half European Handicap", RequiredDomain: DomainPeriodScore}
 	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel != "1" && sel != "HOME" && sel != "X" && sel != "DRAW" && sel != "2" && sel != "AWAY" {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for 1st Half European Handicap", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
+
+	handicap := int(*bet.Line)
 	adjHome := ht.Home + handicap
 	away := ht.Away
 
@@ -1130,6 +1275,9 @@ func (r *FootballHTCorrectScoreRule) Evaluate(state CanonicalEventState, bet Bet
 	if !ok {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score for HT Correct Score settlement", RequiredDomain: DomainPeriodScore}
 	}
+	if ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
 
 	targetScore := strings.TrimSpace(bet.SelectionCode)
 	actualColon := fmt.Sprintf("%d:%d", ht.Home, ht.Away)
@@ -1157,14 +1305,21 @@ func (r *FootballHTCleanSheetRule) Evaluate(state CanonicalEventState, bet BetSe
 	if !ok {
 		ht, ok = state.PeriodScores["HT"]
 	}
+	if ok && (ht.Home < 0 || ht.Away < 0) {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
-	isHomeCleanSheet := strings.Contains(sel, "HOME") || sel == "1" || sel == "YES"
+	isHomeCleanSheet := strings.Contains(sel, "HOME") || sel == "1"
+	isAwayCleanSheet := strings.Contains(sel, "AWAY") || sel == "2"
+	if !isHomeCleanSheet && !isAwayCleanSheet {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for 1st Half Clean Sheet", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
 
 	if isHomeCleanSheet {
 		if ok && ht.Away >= 1 {
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, Reason: "Away team scored in 1H, Home HT clean sheet lost", RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 		}
-	} else {
+	} else if isAwayCleanSheet {
 		if ok && ht.Home >= 1 {
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, Reason: "Home team scored in 1H, Away HT clean sheet lost", RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 		}
@@ -1180,7 +1335,7 @@ func (r *FootballHTCleanSheetRule) Evaluate(state CanonicalEventState, bet BetSe
 				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 			}
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
-		} else {
+		} else if isAwayCleanSheet {
 			if ht.Home == 0 {
 				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 			}
@@ -1207,14 +1362,21 @@ func (r *FootballHTWinToNilRule) Evaluate(state CanonicalEventState, bet BetSele
 	if !ok {
 		ht, ok = state.PeriodScores["HT"]
 	}
+	if ok && (ht.Home < 0 || ht.Away < 0) {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
 	isHome := sel == "1" || strings.Contains(sel, "HOME")
+	isAway := sel == "2" || strings.Contains(sel, "AWAY")
+	if !isHome && !isAway {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for 1st Half Win To Nil", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
 
 	if isHome {
 		if ok && ht.Away >= 1 {
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, Reason: "Opponent scored in 1H, Home HT Win To Nil lost", RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 		}
-	} else {
+	} else if isAway {
 		if ok && ht.Home >= 1 {
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, Reason: "Opponent scored in 1H, Away HT Win To Nil lost", RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 		}
@@ -1230,7 +1392,7 @@ func (r *FootballHTWinToNilRule) Evaluate(state CanonicalEventState, bet BetSele
 				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 			}
 			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
-		} else {
+		} else if isAway {
 			if ht.Away > 0 && ht.Home == 0 {
 				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 			}
@@ -1533,14 +1695,25 @@ func (r *FootballHighestScoringHalfRule) Evaluate(state CanonicalEventState, bet
 	if !ok {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score for Highest Scoring Half settlement", RequiredDomain: DomainPeriodScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 || ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
+	if state.Score.Home < ht.Home || state.Score.Away < ht.Away {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Inconsistent score data: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
+	}
 
 	g1 := ht.Home + ht.Away
 	g2 := (state.Score.Home - ht.Home) + (state.Score.Away - ht.Away)
 
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
-	won := ((sel == "1ST" || sel == "1" || sel == "1H") && g1 > g2) ||
-		((sel == "2ND" || sel == "2" || sel == "2H") && g2 > g1) ||
-		((sel == "EQUAL" || sel == "X" || sel == "DRAW" || sel == "TIE") && g1 == g2)
+	is1st := sel == "1ST" || sel == "1" || sel == "1H"
+	is2nd := sel == "2ND" || sel == "2" || sel == "2H"
+	isEqual := sel == "EQUAL" || sel == "X" || sel == "DRAW" || sel == "TIE"
+	if !is1st && !is2nd && !isEqual {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Highest Scoring Half", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
+
+	won := (is1st && g1 > g2) || (is2nd && g2 > g1) || (isEqual && g1 == g2)
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
@@ -1576,6 +1749,12 @@ func (r *FootballTeamHighestHalfRule) Evaluate(state CanonicalEventState, bet Be
 	if !ok {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score for Team Highest Half settlement", RequiredDomain: DomainPeriodScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 || ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
+	if state.Score.Home < ht.Home || state.Score.Away < ht.Away {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Inconsistent score data: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
+	}
 
 	var g1, g2 int
 	if r.Team == "AWAY" {
@@ -1587,9 +1766,14 @@ func (r *FootballTeamHighestHalfRule) Evaluate(state CanonicalEventState, bet Be
 	}
 
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
-	won := ((sel == "1ST" || sel == "1" || sel == "1H") && g1 > g2) ||
-		((sel == "2ND" || sel == "2" || sel == "2H") && g2 > g1) ||
-		((sel == "EQUAL" || sel == "X" || sel == "DRAW" || sel == "TIE") && g1 == g2)
+	is1st := sel == "1ST" || sel == "1" || sel == "1H"
+	is2nd := sel == "2ND" || sel == "2" || sel == "2H"
+	isEqual := sel == "EQUAL" || sel == "X" || sel == "DRAW" || sel == "TIE"
+	if !is1st && !is2nd && !isEqual {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Team Highest Half", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
+
+	won := (is1st && g1 > g2) || (is2nd && g2 > g1) || (isEqual && g1 == g2)
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
@@ -1619,15 +1803,27 @@ func (r *FootballWinBothHalvesRule) Evaluate(state CanonicalEventState, bet BetS
 	if !ok {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score for Win Both Halves settlement", RequiredDomain: DomainPeriodScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 || ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
+	if state.Score.Home < ht.Home || state.Score.Away < ht.Away {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Inconsistent score data: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
+	}
 
 	h1, a1 := ht.Home, ht.Away
 	h2, a2 := state.Score.Home-ht.Home, state.Score.Away-ht.Away
 
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isHome := sel == "HOME" || sel == "1"
+	isAway := sel == "AWAY" || sel == "2"
+	if !isHome && !isAway {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Win Both Halves", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
+
 	won := false
-	if sel == "HOME" || sel == "1" {
+	if isHome {
 		won = h1 > a1 && h2 > a2
-	} else if sel == "AWAY" || sel == "2" {
+	} else if isAway {
 		won = a1 > h1 && a2 > h2
 	}
 
@@ -1659,12 +1855,24 @@ func (r *FootballScoreBothHalvesRule) Evaluate(state CanonicalEventState, bet Be
 	if !ok {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score for Score Both Halves settlement", RequiredDomain: DomainPeriodScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 || ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
+	if state.Score.Home < ht.Home || state.Score.Away < ht.Away {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Inconsistent score data: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
+	}
 
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isHome := sel == "HOME" || sel == "1"
+	isAway := sel == "AWAY" || sel == "2"
+	if !isHome && !isAway {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for Score Both Halves", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
+
 	won := false
-	if sel == "HOME" || sel == "1" {
+	if isHome {
 		won = ht.Home > 0 && (state.Score.Home-ht.Home) > 0
-	} else if sel == "AWAY" || sel == "2" {
+	} else if isAway {
 		won = ht.Away > 0 && (state.Score.Away-ht.Away) > 0
 	}
 
@@ -1696,15 +1904,27 @@ func (r *FootballToWinEitherHalfRule) Evaluate(state CanonicalEventState, bet Be
 	if !ok {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score for To Win Either Half settlement", RequiredDomain: DomainPeriodScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 || ht.Home < 0 || ht.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainPeriodScore}
+	}
+	if state.Score.Home < ht.Home || state.Score.Away < ht.Away {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Inconsistent score data: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
+	}
 
 	h1, a1 := ht.Home, ht.Away
 	h2, a2 := state.Score.Home-ht.Home, state.Score.Away-ht.Away
 
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isHome := sel == "HOME" || sel == "1"
+	isAway := sel == "AWAY" || sel == "2"
+	if !isHome && !isAway {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Unsupported selection code '%s' for To Win Either Half", bet.SelectionCode), RequiredDomain: DomainPeriodScore}
+	}
+
 	won := false
-	if sel == "HOME" || sel == "1" {
+	if isHome {
 		won = h1 > a1 || h2 > a2
-	} else if sel == "AWAY" || sel == "2" {
+	} else if isAway {
 		won = a1 > h1 || a2 > h2
 	}
 
@@ -1729,18 +1949,22 @@ func (r *FootballMultiGoalsRule) Evaluate(state CanonicalEventState, bet BetSele
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	total := state.Score.Home + state.Score.Away
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
 
-	won := false
 	parts := strings.Split(sel, "-")
-	if len(parts) == 2 {
-		min, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
-		max, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
-		if err1 == nil && err2 == nil {
-			won = total >= min && total <= max
-		}
+	if len(parts) != 2 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Invalid multi-goals selection code '%s': expected format MIN-MAX", bet.SelectionCode), RequiredDomain: DomainScore}
 	}
+	min, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	max, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || min < 0 || min > max {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Invalid multi-goals bounds in selection code '%s'", bet.SelectionCode), RequiredDomain: DomainScore}
+	}
+	won := total >= min && total <= max
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
@@ -1763,6 +1987,9 @@ func (r *FootballResultBTTSRule) Evaluate(state CanonicalEventState, bet BetSele
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
 	h, a := state.Score.Home, state.Score.Away
 	resultOutcome := "X"
 	if h > a {
@@ -1787,12 +2014,12 @@ func (r *FootballResultBTTSRule) Evaluate(state CanonicalEventState, bet BetSele
 	cleanSel = strings.ReplaceAll(cleanSel, "NG", "NO")
 
 	parts := strings.Split(cleanSel, "&")
-	won := false
-	if len(parts) == 2 {
-		selResult := strings.TrimSpace(parts[0])
-		selBTTS := strings.TrimSpace(parts[1])
-		won = selResult == resultOutcome && selBTTS == bttsOutcome
+	if len(parts) != 2 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Invalid combo selection code '%s'", bet.SelectionCode), RequiredDomain: DomainScore}
 	}
+	selResult := strings.TrimSpace(parts[0])
+	selBTTS := strings.TrimSpace(parts[1])
+	won := selResult == resultOutcome && selBTTS == bttsOutcome
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
@@ -1815,6 +2042,13 @@ func (r *FootballResultTotalsRule) Evaluate(state CanonicalEventState, bet BetSe
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
+	if bet.Line == nil {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing required line specifier for Result + Totals", RequiredDomain: DomainScore}
+	}
+
 	h, a := state.Score.Home, state.Score.Away
 	resultOutcome := "X"
 	if h > a {
@@ -1823,10 +2057,7 @@ func (r *FootballResultTotalsRule) Evaluate(state CanonicalEventState, bet BetSe
 		resultOutcome = "2"
 	}
 
-	line := 2.5
-	if bet.Line != nil {
-		line = *bet.Line
-	}
+	line := *bet.Line
 	total := float64(h + a)
 
 	if total == line {
@@ -1847,12 +2078,12 @@ func (r *FootballResultTotalsRule) Evaluate(state CanonicalEventState, bet BetSe
 	cleanSel = strings.ReplaceAll(cleanSel, "AWAY", "2")
 
 	parts := strings.Split(cleanSel, "&")
-	won := false
-	if len(parts) == 2 {
-		selResult := strings.TrimSpace(parts[0])
-		selTotals := strings.TrimSpace(parts[1])
-		won = selResult == resultOutcome && selTotals == totalsOutcome
+	if len(parts) != 2 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Invalid combo selection code '%s'", bet.SelectionCode), RequiredDomain: DomainScore}
 	}
+	selResult := strings.TrimSpace(parts[0])
+	selTotals := strings.TrimSpace(parts[1])
+	won := selResult == resultOutcome && selTotals == totalsOutcome
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
@@ -1875,16 +2106,20 @@ func (r *FootballBTTSTotalsRule) Evaluate(state CanonicalEventState, bet BetSele
 	if !state.IsFinished {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
 	}
+	if state.Score.Home < 0 || state.Score.Away < 0 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative score data detected", RequiredDomain: DomainScore}
+	}
+	if bet.Line == nil {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing required line specifier for BTTS + Totals", RequiredDomain: DomainScore}
+	}
+
 	h, a := state.Score.Home, state.Score.Away
 	bttsOutcome := "NO"
 	if h >= 1 && a >= 1 {
 		bttsOutcome = "YES"
 	}
 
-	line := 2.5
-	if bet.Line != nil {
-		line = *bet.Line
-	}
+	line := *bet.Line
 	total := float64(h + a)
 
 	if total == line {
@@ -1904,12 +2139,12 @@ func (r *FootballBTTSTotalsRule) Evaluate(state CanonicalEventState, bet BetSele
 	cleanSel = strings.ReplaceAll(cleanSel, "NG", "NO")
 
 	parts := strings.Split(cleanSel, "&")
-	won := false
-	if len(parts) == 2 {
-		selBTTS := strings.TrimSpace(parts[0])
-		selTotals := strings.TrimSpace(parts[1])
-		won = selBTTS == bttsOutcome && selTotals == totalsOutcome
+	if len(parts) != 2 {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: fmt.Sprintf("Invalid combo selection code '%s'", bet.SelectionCode), RequiredDomain: DomainScore}
 	}
+	selBTTS := strings.TrimSpace(parts[0])
+	selTotals := strings.TrimSpace(parts[1])
+	won := selBTTS == bttsOutcome && selTotals == totalsOutcome
 
 	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}

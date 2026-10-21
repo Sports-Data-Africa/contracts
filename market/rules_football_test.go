@@ -721,3 +721,320 @@ func TestPhase1ProviderMappingCoverage(t *testing.T) {
 func floatPtr(v float64) *float64 {
 	return &v
 }
+
+func TestPhase1EdgeCasesAndDefects(t *testing.T) {
+	now := time.Now()
+
+	validFTState := CanonicalEventState{
+		CanonicalFixtureID: "SPD-FB-AUDIT-VALID",
+		SportID:            1,
+		Status:             FixtureStatusFT,
+		IsFinished:         true,
+		Score:              ScoreData{Home: 2, Away: 1},
+		PeriodScores: map[string]ScoreData{
+			"1H": {Home: 1, Away: 0},
+			"HT": {Home: 1, Away: 0},
+		},
+		IsPeriodFinished: map[string]bool{PeriodHalfTime: true, PeriodFullTime: true},
+		ScoreConfirmedAt: now,
+	}
+
+	inconsistentFTState := CanonicalEventState{
+		CanonicalFixtureID: "SPD-FB-AUDIT-INCONSISTENT",
+		SportID:            1,
+		Status:             FixtureStatusFT,
+		IsFinished:         true,
+		Score:              ScoreData{Home: 1, Away: 1}, // FT Home is 1, but HT Home is 2! Inconsistent!
+		PeriodScores: map[string]ScoreData{
+			"1H": {Home: 2, Away: 0},
+			"HT": {Home: 2, Away: 0},
+		},
+		IsPeriodFinished: map[string]bool{PeriodHalfTime: true, PeriodFullTime: true},
+		ScoreConfirmedAt: now,
+	}
+
+	negativeScoreState := CanonicalEventState{
+		CanonicalFixtureID: "SPD-FB-AUDIT-NEGATIVE",
+		SportID:            1,
+		Status:             FixtureStatusFT,
+		IsFinished:         true,
+		Score:              ScoreData{Home: -1, Away: 2},
+		PeriodScores: map[string]ScoreData{
+			"1H": {Home: 0, Away: 1},
+			"HT": {Home: 0, Away: 1},
+		},
+		IsPeriodFinished: map[string]bool{PeriodHalfTime: true, PeriodFullTime: true},
+		ScoreConfirmedAt: now,
+	}
+
+	edgeTests := []struct {
+		name         string
+		state        CanonicalEventState
+		bet          BetSelection
+		expectStatus string
+	}{
+		// 1. Missing Line Specifier -> Hold
+		{
+			name:  "FB_TOTAL_GOALS missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_TOTAL_GOALS", Period: PeriodFullTime,
+				SelectionCode: "OVER", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_HOME_TOTALS missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_HOME_TOTALS", Period: PeriodFullTime,
+				SelectionCode: "OVER", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_AWAY_TOTALS missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_AWAY_TOTALS", Period: PeriodFullTime,
+				SelectionCode: "OVER", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_HOME_TOTALS_HT missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_HOME_TOTALS_HT", Period: PeriodHalfTime,
+				SelectionCode: "OVER", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_AWAY_TOTALS_HT missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_AWAY_TOTALS_HT", Period: PeriodHalfTime,
+				SelectionCode: "OVER", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_EUROPEAN_HANDICAP missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_EUROPEAN_HANDICAP", Period: PeriodFullTime,
+				SelectionCode: "1", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_HT_EUROPEAN_HCP missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_HT_EUROPEAN_HCP", Period: PeriodHalfTime,
+				SelectionCode: "1", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_ASIAN_HANDICAP missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_ASIAN_HANDICAP", Period: PeriodFullTime,
+				SelectionCode: "1", Line: nil, LineQuarters: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_HT_ASIAN_HANDICAP missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_HT_ASIAN_HANDICAP", Period: PeriodHalfTime,
+				SelectionCode: "1", Line: nil, LineQuarters: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_RESULT_TOTALS missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_RESULT_TOTALS", Period: PeriodFullTime,
+				SelectionCode: "1 & OVER", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_BTTS_TOTALS missing line holds",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_BTTS_TOTALS", Period: PeriodFullTime,
+				SelectionCode: "YES & OVER", Line: nil, RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+
+		// 2. Score Inconsistency (FT < HT) -> Hold
+		{
+			name:  "FB_WIN_BOTH_HALVES holds on FT < HT inconsistency",
+			state: inconsistentFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_WIN_BOTH_HALVES", Period: PeriodFullTime,
+				SelectionCode: "HOME", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_SCORE_BOTH_HALVES holds on FT < HT inconsistency",
+			state: inconsistentFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_SCORE_BOTH_HALVES", Period: PeriodFullTime,
+				SelectionCode: "HOME", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_TO_WIN_EITHER_HALF holds on FT < HT inconsistency",
+			state: inconsistentFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_TO_WIN_EITHER_HALF", Period: PeriodFullTime,
+				SelectionCode: "HOME", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_HIGHEST_SCORING_HALF holds on FT < HT inconsistency",
+			state: inconsistentFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_HIGHEST_SCORING_HALF", Period: PeriodFullTime,
+				SelectionCode: "1ST", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+
+		// 3. Negative Score -> Hold
+		{
+			name:  "FB_1X2 holds on negative score",
+			state: negativeScoreState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_1X2", Period: PeriodFullTime,
+				SelectionCode: "1", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_TOTAL_GOALS holds on negative score",
+			state: negativeScoreState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_TOTAL_GOALS", Period: PeriodFullTime,
+				SelectionCode: "OVER", Line: floatPtr(2.5), RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_MULTI_GOALS holds on negative score",
+			state: negativeScoreState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_MULTI_GOALS", Period: PeriodFullTime,
+				SelectionCode: "2-4", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+
+		// 4. Invalid Selection Codes -> Hold (NOT silent loss or wrong side)
+		{
+			name:  "FB_CLEAN_SHEET holds on invalid selection code",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_CLEAN_SHEET", Period: PeriodFullTime,
+				SelectionCode: "FOOBAR", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_HT_CLEAN_SHEET holds on invalid selection code",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_HT_CLEAN_SHEET", Period: PeriodHalfTime,
+				SelectionCode: "XYZ", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_WIN_TO_NIL holds on invalid selection code",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_WIN_TO_NIL", Period: PeriodFullTime,
+				SelectionCode: "NONSENSE", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_HT_WIN_TO_NIL holds on invalid selection code",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_HT_WIN_TO_NIL", Period: PeriodHalfTime,
+				SelectionCode: "UNKNOWN", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_MULTI_GOALS holds on invalid format (not hyphenated)",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_MULTI_GOALS", Period: PeriodFullTime,
+				SelectionCode: "TWO_TO_FOUR", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_MULTI_GOALS holds on invalid inverted range (min > max)",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_MULTI_GOALS", Period: PeriodFullTime,
+				SelectionCode: "5-2", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_RESULT_BTTS holds on invalid combo selection format",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_RESULT_BTTS", Period: PeriodFullTime,
+				SelectionCode: "HOME_AND_YES_WITHOUT_AMPERSAND", RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_RESULT_TOTALS holds on invalid combo selection format",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_RESULT_TOTALS", Period: PeriodFullTime,
+				SelectionCode: "INVALID_COMBO", Line: floatPtr(2.5), RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+		{
+			name:  "FB_BTTS_TOTALS holds on invalid combo selection format",
+			state: validFTState,
+			bet: BetSelection{
+				SportID: 1, CanonicalMarketCode: "FB_BTTS_TOTALS", Period: PeriodFullTime,
+				SelectionCode: "INVALID_COMBO", Line: floatPtr(2.5), RuleVersion: 1,
+			},
+			expectStatus: BetStatusSettlementHold,
+		},
+	}
+
+	for _, tc := range edgeTests {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := Evaluate(tc.state, tc.bet)
+			if err != nil {
+				t.Fatalf("Evaluate returned unexpected error: %v", err)
+			}
+			if res.Status != tc.expectStatus {
+				t.Errorf("expected status %s, got %s (reason: %s)", tc.expectStatus, res.Status, res.Reason)
+			}
+		})
+	}
+}
+

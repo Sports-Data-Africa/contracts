@@ -276,10 +276,10 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 	case 1: // Football
 		switch {
 		// 1. Combo Markets
-		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2") || rawID == "1") &&
+		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2")) &&
 			(strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "btts") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "gg")):
 			return "FB_RESULT_BTTS", PeriodFullTime, rawSel
-		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2") || rawID == "1") &&
+		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2")) &&
 			(strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "totals")):
 			return "FB_RESULT_TOTALS", PeriodFullTime, rawSel
 		case (strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "btts") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "gg")) &&
@@ -651,10 +651,10 @@ func mapOdibets(sportID int, rawID, normDesc, rawSel string) (string, string, st
 	switch sportID {
 	case 1: // Football
 		switch {
-		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2") || rawID == "1") &&
+		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2")) &&
 			(strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "btts") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "gg")):
 			return "FB_RESULT_BTTS", PeriodFullTime, rawSel
-		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2") || rawID == "1") &&
+		case (strings.Contains(normDesc, "result") || strings.Contains(normDesc, "1x2")) &&
 			(strings.Contains(normDesc, "over/under") || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "totals")):
 			return "FB_RESULT_TOTALS", PeriodFullTime, rawSel
 		case (strings.Contains(normDesc, "both teams to score") || strings.Contains(normDesc, "btts") || strings.Contains(normDesc, "gg/ng") || strings.Contains(normDesc, "gg")) &&

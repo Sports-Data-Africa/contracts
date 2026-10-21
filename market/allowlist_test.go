@@ -36,10 +36,14 @@ func TestIsMarketSettleableAndAllowlisted_Matrix(t *testing.T) {
 		{"Cricket Match Winner", 8, "MATCH_WINNER", "Match Winner", true},
 		{"MMA Fight Winner", 6, "FIGHT_WINNER", "Fight Winner", true},
 
+		// Football 1st Half (Verified & Allowlisted)
+		{"Football 1st Half 1X2", 1, "FIRST_HALF_1X2", "1st Half 1X2", true},
+		{"Football 1st Half Over/Under", 1, "1st Half - Over/Under", "1st Half - Over/Under", true},
+
 		// Blocked / Suspended Markets
 		{"Football Corners Over/Under", 1, "FB_CORNERS_TOTAL", "Corners Over/Under 9.5", false},
 		{"Football Cards Over/Under", 1, "FB_CARDS_TOTAL", "Cards Over/Under 3.5", false},
-		{"Football 1st Half 1X2", 1, "FIRST_HALF_1X2", "1st Half 1X2", false},
+		{"Football 2nd Half 1X2", 1, "2ND_HALF_1X2", "2nd Half 1X2", false},
 		{"Basketball 1st Quarter Winner", 2, "Q1_WINNER", "1st Quarter Winner", false},
 		{"Ice Hockey Regulation 1X2", 4, "1X2", "Regulation 1X2 (3-Way)", false},
 		{"Table Tennis Match Winner", 13, "TT_MATCH_WINNER", "Match Winner", false},
@@ -75,13 +79,19 @@ func TestCanPlaceMarket_DirectCapability(t *testing.T) {
 		t.Errorf("expected FB_1X2 to be allowed for placement, got false: %s", reason)
 	}
 
-	// 2. Suspended period market
-	allowedHT, _ := CanPlaceMarket(1, "FB_TOTAL_GOALS", "Total Goals Over/Under", PeriodHalfTime)
-	if allowedHT {
-		t.Errorf("expected FB_TOTAL_GOALS in HT to be suspended pending feed certification, got allowed=true")
+	// 2. Approved verified football half-time market
+	allowedHT, reasonHT := CanPlaceMarket(1, "1ST_HALF_OVER_UNDER", "1st Half - Over/Under", PeriodHalfTime)
+	if !allowedHT {
+		t.Errorf("expected 1ST_HALF_OVER_UNDER in HT to be allowed, got false: %s", reasonHT)
 	}
 
-	// 3. Unmapped novelty market fails closed
+	// 3. Suspended unverified period market (2nd half / basketball quarter)
+	allowed2H, _ := CanPlaceMarket(1, "2ND_HALF_TOTAL", "2nd Half Total", PeriodSecondHalf)
+	if allowed2H {
+		t.Errorf("expected 2nd half market to be suspended, got allowed=true")
+	}
+
+	// 4. Unmapped novelty market fails closed
 	allowedNovelty, _ := CanPlaceMarket(1, "YELLOW_CARD_MINUTE", "First Yellow Card Minute", PeriodFullTime)
 	if allowedNovelty {
 		t.Errorf("expected unmapped novelty market to fail closed, got allowed=true")

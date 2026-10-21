@@ -51,9 +51,12 @@ var (
 		"1:HT_1X2":              {SportID: 1, SportName: "Football", MarketCode: "HT_1X2", Period: PeriodHalfTime, Rationale: "Half-time period score confirmed by provider live score feeds"},
 		"1:1ST_HALF":            {SportID: 1, SportName: "Football", MarketCode: "1ST_HALF", Period: PeriodHalfTime, Rationale: "Half-time period score confirmed by provider live score feeds"},
 		"1:FIRST_HALF":          {SportID: 1, SportName: "Football", MarketCode: "FIRST_HALF", Period: PeriodHalfTime, Rationale: "Half-time period score confirmed by provider live score feeds"},
-		"1:HALF_TIME":           {SportID: 1, SportName: "Football", MarketCode: "HALF_TIME", Period: PeriodHalfTime, Rationale: "Half-time period score confirmed by provider live score feeds"},
 		"1:HT_OVER_UNDER":       {SportID: 1, SportName: "Football", MarketCode: "HT_OVER_UNDER", Period: PeriodHalfTime, Rationale: "Half-time total goals confirmed by provider live score feeds"},
 		"1:1ST_HALF_OVER_UNDER": {SportID: 1, SportName: "Football", MarketCode: "1ST_HALF_OVER_UNDER", Period: PeriodHalfTime, Rationale: "Half-time total goals confirmed by provider live score feeds"},
+		"1:1ST_HALF_1X2":        {SportID: 1, SportName: "Football", MarketCode: "HT_1X2", Period: PeriodHalfTime, Rationale: "Half-time 1X2 confirmed by provider live score feeds"},
+		"1:FIRST_HALF_1X2":      {SportID: 1, SportName: "Football", MarketCode: "HT_1X2", Period: PeriodHalfTime, Rationale: "Half-time 1X2 confirmed by provider live score feeds"},
+		"1:1ST_HALF_BTTS":       {SportID: 1, SportName: "Football", MarketCode: "HT_BTTS", Period: PeriodHalfTime, Rationale: "Half-time BTTS confirmed by provider live score feeds"},
+		"1:HT_BTTS":             {SportID: 1, SportName: "Football", MarketCode: "HT_BTTS", Period: PeriodHalfTime, Rationale: "Half-time BTTS confirmed by provider live score feeds"},
 		"1:ODD_EVEN":            {SportID: 1, SportName: "Football", MarketCode: "ODD_EVEN", Period: PeriodFullTime, Rationale: "Match goal parity supported by FT score"},
 		"1:TOTAL_ODD_EVEN":      {SportID: 1, SportName: "Football", MarketCode: "TOTAL_ODD_EVEN", Period: PeriodFullTime, Rationale: "Match goal parity supported by FT score"},
 
@@ -156,9 +159,13 @@ func evaluateMarketPlacement(sportID int, rawMarketCode, marketName, period stri
 	}
 
 	// 3. Half-Time & Period/Quarter/Set/Innings Gate
+	// Verified Football (SportID 1) Half-Time markets are certified and supported.
+	// 2nd half, basketball quarters, tennis sets, and hockey periods remain suspended.
 	isHT := normCode == "HT" || strings.HasPrefix(normCode, "HT_") || strings.HasSuffix(normCode, "_HT") ||
 		strings.Contains(normCode, "_HT_") || strings.Contains(normCode, "HALF_TIME") || strings.Contains(normCode, "FIRST_HALF") ||
-		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "2ND_HALF") || normPeriod == PeriodHalfTime || normPeriod == PeriodSecondHalf
+		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "1ST HALF") || normPeriod == PeriodHalfTime
+
+	is2ndHalf := strings.Contains(normCode, "2ND_HALF") || strings.Contains(normCode, "2ND HALF") || strings.Contains(normName, "2nd half") || normPeriod == PeriodSecondHalf
 
 	isQuarter := normCode == "Q1" || normCode == "Q2" || normCode == "Q3" || normCode == "Q4" ||
 		strings.HasPrefix(normCode, "Q1_") || strings.HasPrefix(normCode, "Q2_") || strings.HasPrefix(normCode, "Q3_") || strings.HasPrefix(normCode, "Q4_") ||
@@ -175,14 +182,13 @@ func evaluateMarketPlacement(sportID int, rawMarketCode, marketName, period stri
 		strings.HasSuffix(normCode, "_P1") || strings.HasSuffix(normCode, "_P2") || strings.HasSuffix(normCode, "_P3") ||
 		normPeriod == PeriodPeriod1 || normPeriod == PeriodPeriod2 || normPeriod == PeriodPeriod3
 
-	isPeriodMarket := isHT || isQuarter || isSet || isPeriod ||
-		strings.Contains(normName, "1st half") || strings.Contains(normName, "first half") ||
-		strings.Contains(normName, "halftime") || strings.Contains(normName, "half time") || strings.Contains(normName, "2nd half") ||
+	isSuspendedPeriod := is2ndHalf || isQuarter || isSet || isPeriod ||
+		(sportID != 1 && (isHT || strings.Contains(normName, "1st half") || strings.Contains(normName, "half time") || strings.Contains(normName, "halftime"))) ||
 		strings.Contains(normName, "quarter") || strings.Contains(normName, "1st quarter") || strings.Contains(normName, "2nd quarter") ||
 		strings.Contains(normName, "set 1") || strings.Contains(normName, "set 2") || strings.Contains(normName, "1st set") ||
 		strings.Contains(normName, "period 1") || strings.Contains(normName, "period 2") || strings.Contains(normName, "1st period")
-	if isPeriodMarket {
-		return false, "Period and interval markets (HT/Quarter/Set/Period) are suspended pending verified period feed delivery"
+	if isSuspendedPeriod {
+		return false, "Period and interval markets (Quarter/Set/Period/2nd Half) are suspended pending verified period feed delivery"
 	}
 
 	// 4. Ice Hockey Regulation 1X2 Gate (conflict with OT / missing period breakdowns)
@@ -217,6 +223,20 @@ func evaluateMarketPlacement(sportID int, rawMarketCode, marketName, period stri
 
 	key := fmt.Sprintf("%d:%s", sportID, normCode)
 	if _, ok := authoritativeAllowlist[key]; ok {
+		return true, ""
+	}
+
+	// Try normalized key replacing spaces, dashes, slashes with underscores
+	sanitizedCode := strings.ReplaceAll(normCode, " - ", "_")
+	sanitizedCode = strings.ReplaceAll(sanitizedCode, "-", "_")
+	sanitizedCode = strings.ReplaceAll(sanitizedCode, " / ", "_")
+	sanitizedCode = strings.ReplaceAll(sanitizedCode, "/", "_")
+	sanitizedCode = strings.ReplaceAll(sanitizedCode, " ", "_")
+	for strings.Contains(sanitizedCode, "__") {
+		sanitizedCode = strings.ReplaceAll(sanitizedCode, "__", "_")
+	}
+	keySanitized := fmt.Sprintf("%d:%s", sportID, sanitizedCode)
+	if _, ok := authoritativeAllowlist[keySanitized]; ok {
 		return true, ""
 	}
 

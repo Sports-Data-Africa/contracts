@@ -94,7 +94,12 @@ func (r *Registry) ListAll() []MarketRuleKey {
 func Evaluate(state CanonicalEventState, bet BetSelection) (SettlementResult, error) {
 	period := bet.Period
 	if period == "" {
-		period = PeriodFullTime
+		return SettlementResult{
+			Status:       BetStatusSettlementHold,
+			PayoutFactor: 0.0,
+			Settled:      false,
+			Reason:       fmt.Sprintf("MISSING_PERIOD: Period cannot be inferred during settlement for sport=%d, code=%s", bet.SportID, bet.CanonicalMarketCode),
+		}, fmt.Errorf("missing period on bet %s: cannot infer period at settlement", bet.BetID)
 	}
 	version := bet.RuleVersion
 	if version <= 0 {

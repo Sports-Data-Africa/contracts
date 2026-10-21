@@ -1,5 +1,7 @@
 package market
 
+import "strings"
+
 // Canonical Result Domains
 // A disagreement in DOMAIN_CORNERS must NOT prevent settlement of DOMAIN_SCORE markets.
 const (
@@ -56,11 +58,47 @@ const (
 	FixtureStatusInterrupted = "INTERRUPTED"
 )
 
-// Market Operational Statuses
+// Market Operational & Capability Statuses
 const (
 	MarketStatusActive              = "ACTIVE"
 	MarketStatusDisabledUnsupported = "DISABLED_UNSUPPORTED"
 	MarketStatusSuspended           = "SUSPENDED"
+	MarketStatusQuarantined         = "QUARANTINED"
+	MarketStatusShadow              = "SHADOW"
+)
+
+// Canonical Formula Types (Mathematical models)
+const (
+	Formula1X2          = "1X2"
+	FormulaMoneyline    = "MONEYLINE"
+	FormulaTotals       = "TOTALS"
+	FormulaHandicap     = "HANDICAP"
+	FormulaBTTS         = "BTTS"
+	FormulaDoubleChance = "DOUBLE_CHANCE"
+	FormulaDNB          = "DNB"
+	FormulaOddEven      = "ODD_EVEN"
+	FormulaExact        = "EXACT"
+)
+
+// Canonical Metrics
+const (
+	MetricGoals   = "goals"
+	MetricPoints  = "points"
+	MetricCorners = "corners"
+	MetricCards   = "cards"
+	MetricSets    = "sets"
+	MetricGames   = "games"
+	MetricRounds  = "rounds"
+	MetricTries   = "tries"
+	MetricRuns    = "runs"
+	MetricWickets = "wickets"
+)
+
+// Target Participants
+const (
+	TargetMatch = "match"
+	TargetHome  = "home"
+	TargetAway  = "away"
 )
 
 // Active Provider Identifiers
@@ -96,3 +134,61 @@ const (
 	PeriodRound4     = "ROUND4"
 	PeriodRound5     = "ROUND5"
 )
+
+// NormalizePeriod normalizes any variant period string into canonical Period constant.
+func NormalizePeriod(period string) string {
+	s := strings.ToUpper(strings.TrimSpace(period))
+	switch s {
+	case "FT", "FULL_TIME", "FULLTIME", "MATCH", "REGULAR":
+		return PeriodFullTime
+	case "HT", "HALF_TIME", "HALFTIME", "1H", "1ST_HALF", "FIRST_HALF":
+		return PeriodHalfTime
+	case "2H", "2ND_HALF", "SECOND_HALF":
+		return PeriodSecondHalf
+	case "ET", "EXTRA_TIME", "EXTRATIME":
+		return PeriodExtraTime
+	case "PEN", "PENALTIES", "PENALTY_SHOOTOUT":
+		return PeriodPenalties
+	case "Q1", "1ST_QUARTER", "QUARTER1", "QUARTER_1":
+		return PeriodQuarter1
+	case "Q2", "2ND_QUARTER", "QUARTER2", "QUARTER_2":
+		return PeriodQuarter2
+	case "Q3", "3RD_QUARTER", "QUARTER3", "QUARTER_3":
+		return PeriodQuarter3
+	case "Q4", "4TH_QUARTER", "QUARTER4", "QUARTER_4":
+		return PeriodQuarter4
+	case "SET1", "S1", "1ST_SET", "SET_1":
+		return PeriodSet1
+	case "SET2", "S2", "2ND_SET", "SET_2":
+		return PeriodSet2
+	case "SET3", "S3", "3RD_SET", "SET_3":
+		return PeriodSet3
+	case "SET4", "S4", "4TH_SET", "SET_4":
+		return PeriodSet4
+	case "SET5", "S5", "5TH_SET", "SET_5":
+		return PeriodSet5
+	case "PERIOD1", "P1", "1ST_PERIOD", "PERIOD_1":
+		return PeriodPeriod1
+	case "PERIOD2", "P2", "2ND_PERIOD", "PERIOD_2":
+		return PeriodPeriod2
+	case "PERIOD3", "P3", "3RD_PERIOD", "PERIOD_3":
+		return PeriodPeriod3
+	case "INNINGS1", "1ST_INNINGS":
+		return PeriodInnings1
+	case "INNINGS2", "2ND_INNINGS":
+		return PeriodInnings2
+	case "ROUND1", "R1", "1ST_ROUND":
+		return PeriodRound1
+	case "ROUND2", "R2", "2ND_ROUND":
+		return PeriodRound2
+	case "ROUND3", "R3", "3RD_ROUND":
+		return PeriodRound3
+	case "ROUND4", "R4", "4TH_ROUND":
+		return PeriodRound4
+	case "ROUND5", "R5", "5TH_ROUND":
+		return PeriodRound5
+	default:
+		return s
+	}
+}
+

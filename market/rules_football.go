@@ -92,18 +92,28 @@ func (r *FootballTotalGoalsRule) Evaluate(state CanonicalEventState, bet BetSele
 		} else if ht, ok := state.PeriodScores["HT"]; ok {
 			currentGoals = ht.Home + ht.Away
 		} else {
-			currentGoals = state.Score.Home + state.Score.Away
+			// Fail-closed: missing HT score must NEVER fallback to full-time score
+			return SettlementResult{
+				Status:         BetStatusSettlementHold,
+				Settled:        false,
+				Reason:         "Missing authoritative Half-Time period score data",
+				Timing:         r.Timing(),
+				RequiredDomain: r.RequiredDomain(),
+			}
 		}
 		periodDone = state.IsPeriodFinished[PeriodHalfTime] || state.Status == FixtureStatusHT || state.IsFinished
 	case PeriodSecondHalf:
 		if p2, ok := state.PeriodScores["2H"]; ok {
 			currentGoals = p2.Home + p2.Away
 		} else {
-			htGoals := 0
-			if ht, ok := state.PeriodScores["1H"]; ok {
-				htGoals = ht.Home + ht.Away
+			// Fail-closed: missing 2H score must NEVER be inferred or subtracted from FT score
+			return SettlementResult{
+				Status:         BetStatusSettlementHold,
+				Settled:        false,
+				Reason:         "Missing authoritative 2nd Half period score data",
+				Timing:         r.Timing(),
+				RequiredDomain: r.RequiredDomain(),
 			}
-			currentGoals = (state.Score.Home + state.Score.Away) - htGoals
 		}
 		periodDone = state.IsFinished
 	default:

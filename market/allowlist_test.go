@@ -15,16 +15,16 @@ func TestIsMarketSettleableAndAllowlisted_Matrix(t *testing.T) {
 	}{
 		// Football (Allowlisted)
 		{"Football 1X2", 1, "1X2", "Match Result", true},
-		{"Football Over/Under Goals", 1, "OVER_UNDER", "Total Goals Over/Under", true},
+		{"Football Over/Under Goals", 1, "OVER_UNDER", "Total Goals Over/Under 2.5", true},
 		{"Football BTTS", 1, "BTTS", "Both Teams To Score", true},
 		{"Football Double Chance", 1, "DOUBLE_CHANCE", "Double Chance", true},
 		{"Football Draw No Bet", 1, "DRAW_NO_BET", "Draw No Bet", true},
-		{"Football Asian Handicap", 1, "FB_ASIAN_HANDICAP", "Asian Handicap", true},
+		{"Football Asian Handicap", 1, "FB_ASIAN_HANDICAP", "Asian Handicap -0.5", true},
 
 		// Basketball (Allowlisted incl. OT)
 		{"Basketball Moneyline", 2, "MONEYLINE", "Winner (incl. overtime)", true},
-		{"Basketball Total Points", 2, "TOTAL_POINTS", "Total Points (incl. overtime)", true},
-		{"Basketball Spread", 2, "SPREAD", "Spread (incl. overtime)", true},
+		{"Basketball Total Points", 2, "TOTAL_POINTS", "Total Points Over/Under 215.5", true},
+		{"Basketball Spread", 2, "SPREAD", "Spread -4.5 (incl. overtime)", true},
 
 		// Ice Hockey (Allowlisted Moneyline only)
 		{"Ice Hockey Moneyline", 4, "MONEYLINE", "Winner (incl. overtime)", true},
@@ -38,7 +38,7 @@ func TestIsMarketSettleableAndAllowlisted_Matrix(t *testing.T) {
 
 		// Football 1st Half (Verified & Allowlisted)
 		{"Football 1st Half 1X2", 1, "FIRST_HALF_1X2", "1st Half 1X2", true},
-		{"Football 1st Half Over/Under", 1, "1st Half - Over/Under", "1st Half - Over/Under", true},
+		{"Football 1st Half Over/Under", 1, "1st Half - Over/Under", "1st Half - Over/Under 0.5", true},
 
 		// Blocked / Suspended Markets
 		{"Football Corners Over/Under", 1, "FB_CORNERS_TOTAL", "Corners Over/Under 9.5", false},
@@ -80,7 +80,7 @@ func TestCanPlaceMarket_DirectCapability(t *testing.T) {
 	}
 
 	// 2. Approved verified football half-time market
-	allowedHT, reasonHT := CanPlaceMarket(1, "1ST_HALF_OVER_UNDER", "1st Half - Over/Under", PeriodHalfTime)
+	allowedHT, reasonHT := CanPlaceMarket(1, "1ST_HALF_OVER_UNDER", "1st Half - Over/Under 0.5", PeriodHalfTime)
 	if !allowedHT {
 		t.Errorf("expected 1ST_HALF_OVER_UNDER in HT to be allowed, got false: %s", reasonHT)
 	}

@@ -22,7 +22,7 @@ type MMAFightWinnerRule struct{}
 func (r *MMAFightWinnerRule) Key() MarketRuleKey {
 	return MarketRuleKey{SportID: 6, MarketCode: "MM_FIGHT_WINNER", Period: PeriodFullTime, RuleVersion: 1}
 }
-func (r *MMAFightWinnerRule) RequiredDomain() string { return DomainRounds }
+func (r *MMAFightWinnerRule) RequiredDomain() string { return DomainScore }
 func (r *MMAFightWinnerRule) Timing() string         { return TimingEventEnd }
 
 func (r *MMAFightWinnerRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {

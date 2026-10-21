@@ -23,6 +23,9 @@ type MarketDefinition struct {
 	MarketCode           string   `json:"market_code"`
 	MarketName           string   `json:"market_name"`
 	Period               string   `json:"period"`
+	FormulaType          string   `json:"formula_type,omitempty"` // 1X2, MONEYLINE, TOTALS, HANDICAP, BTTS, DOUBLE_CHANCE, DNB, ODD_EVEN, EXACT
+	Metric               string   `json:"metric,omitempty"`       // goals, points, corners, cards, sets, games, rounds, etc.
+	Target               string   `json:"target,omitempty"`       // match, home, away
 	RequiredResultDomain string   `json:"required_result_domain"`
 	SettlementTiming     string   `json:"settlement_timing"`
 	RuleVersion          int      `json:"rule_version"`
@@ -31,7 +34,7 @@ type MarketDefinition struct {
 	LineType             string   `json:"line_type,omitempty"` // "DECIMAL", "QUARTERS", "INTEGER"
 	IncludesOvertime     bool     `json:"includes_overtime"`
 	IncludesShootout     bool     `json:"includes_shootout"`
-	Status               string   `json:"status"` // ACTIVE, DISABLED_UNSUPPORTED
+	Status               string   `json:"status"` // ACTIVE, SUSPENDED, QUARANTINED, DISABLED_UNSUPPORTED
 }
 
 // ScoreData captures a 2-way home/away score.

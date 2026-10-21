@@ -526,7 +526,7 @@ func init() {
 			SupportedSelections:  []string{"1", "X", "2"},
 			IncludesOvertime:     false,
 			IncludesShootout:     false,
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 		{
 			SportID:              4,
@@ -671,7 +671,7 @@ func init() {
 			MarketCode:           "MM_FIGHT_WINNER",
 			MarketName:           "Fight Winner",
 			Period:               PeriodFullTime,
-			RequiredResultDomain: DomainRounds,
+			RequiredResultDomain: DomainScore,
 			SettlementTiming:     TimingEventEnd,
 			RuleVersion:          1,
 			SupportedSelections:  []string{"1", "2"},

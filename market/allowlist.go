@@ -139,120 +139,98 @@ func evaluateMarketPlacement(sportID int, rawMarketCode, marketName, period stri
 	}
 
 	normCode := strings.ToUpper(strings.TrimSpace(rawMarketCode))
-	normName := strings.ToLower(strings.TrimSpace(marketName))
 	normPeriod := strings.ToUpper(strings.TrimSpace(period))
 
 	// 1. Quarantined Sports Gate: Table Tennis (SportID 13) and non-released sports (9, 10, 11)
-	if sportID == 13 || strings.Contains(normName, "table tennis") || strings.Contains(normName, "ping pong") {
+	if sportID == 13 || strings.Contains(strings.ToLower(marketName), "table tennis") || strings.Contains(strings.ToLower(marketName), "ping pong") {
 		return false, "Table Tennis is quarantined from wagering until dedicated official umpire feeds are integrated"
 	}
 	if sportID == 9 || sportID == 10 || sportID == 11 {
 		return false, fmt.Sprintf("Sport ID %d is quarantined from client wagering pending full provider certification", sportID)
 	}
 
-	// 2. Corners & Cards Gate (suspended pending feed statistics integration)
-	if strings.Contains(normCode, "CORNER") || strings.Contains(normName, "corner") {
-		return false, "Corners markets are suspended pending feed statistics integration"
-	}
-	if strings.Contains(normCode, "CARD") || strings.Contains(normName, "card") {
-		return false, "Cards markets are suspended pending feed statistics integration"
-	}
-
-	// 3. Half-Time & Period/Quarter/Set/Innings Gate
-	// Verified Football (SportID 1) Half-Time markets are certified and supported.
-	// 2nd half, basketball quarters, tennis sets, and hockey periods remain suspended.
-	isHT := normCode == "HT" || strings.HasPrefix(normCode, "HT_") || strings.HasSuffix(normCode, "_HT") ||
-		strings.Contains(normCode, "_HT_") || strings.Contains(normCode, "HALF_TIME") || strings.Contains(normCode, "FIRST_HALF") ||
-		strings.Contains(normCode, "1ST_HALF") || strings.Contains(normCode, "1ST HALF") || normPeriod == PeriodHalfTime
-
-	is2ndHalf := strings.Contains(normCode, "2ND_HALF") || strings.Contains(normCode, "2ND HALF") || strings.Contains(normName, "2nd half") || normPeriod == PeriodSecondHalf
-
-	isQuarter := normCode == "Q1" || normCode == "Q2" || normCode == "Q3" || normCode == "Q4" ||
-		strings.HasPrefix(normCode, "Q1_") || strings.HasPrefix(normCode, "Q2_") || strings.HasPrefix(normCode, "Q3_") || strings.HasPrefix(normCode, "Q4_") ||
-		strings.HasSuffix(normCode, "_Q1") || strings.HasSuffix(normCode, "_Q2") || strings.HasSuffix(normCode, "_Q3") || strings.HasSuffix(normCode, "_Q4") ||
-		normPeriod == PeriodQuarter1 || normPeriod == PeriodQuarter2 || normPeriod == PeriodQuarter3 || normPeriod == PeriodQuarter4
-
-	isSet := normCode == "S1" || normCode == "S2" || normCode == "S3" ||
-		strings.HasPrefix(normCode, "S1_") || strings.HasPrefix(normCode, "S2_") || strings.HasPrefix(normCode, "S3_") ||
-		strings.HasSuffix(normCode, "_S1") || strings.HasSuffix(normCode, "_S2") || strings.HasSuffix(normCode, "_S3") ||
-		normPeriod == PeriodSet1 || normPeriod == PeriodSet2 || normPeriod == PeriodSet3
-
-	isPeriod := normCode == "P1" || normCode == "P2" || normCode == "P3" ||
-		strings.HasPrefix(normCode, "P1_") || strings.HasPrefix(normCode, "P2_") || strings.HasPrefix(normCode, "P3_") ||
-		strings.HasSuffix(normCode, "_P1") || strings.HasSuffix(normCode, "_P2") || strings.HasSuffix(normCode, "_P3") ||
-		normPeriod == PeriodPeriod1 || normPeriod == PeriodPeriod2 || normPeriod == PeriodPeriod3
-
-	isSuspendedPeriod := is2ndHalf || isQuarter || isSet || isPeriod ||
-		(sportID != 1 && (isHT || strings.Contains(normName, "1st half") || strings.Contains(normName, "half time") || strings.Contains(normName, "halftime"))) ||
-		strings.Contains(normName, "quarter") || strings.Contains(normName, "1st quarter") || strings.Contains(normName, "2nd quarter") ||
-		strings.Contains(normName, "set 1") || strings.Contains(normName, "set 2") || strings.Contains(normName, "1st set") ||
-		strings.Contains(normName, "period 1") || strings.Contains(normName, "period 2") || strings.Contains(normName, "1st period")
-	if isSuspendedPeriod {
-		return false, "Period and interval markets (Quarter/Set/Period/2nd Half) are suspended pending verified period feed delivery"
-	}
-
-	// 4. Ice Hockey Regulation 1X2 Gate (conflict with OT / missing period breakdowns)
-	if sportID == 4 && (strings.Contains(normCode, "REGULATION") || strings.Contains(normName, "regulation") ||
-		strings.Contains(normCode, "1X2") || strings.Contains(normName, "1x2") || strings.Contains(normName, "3 way")) {
-		return false, "Ice Hockey 3-way regulation is suspended; only Winner/Moneyline (incl. OT) is offered"
-	}
-
-	// 5. Tennis Total Games & Handicaps
-	if sportID == 3 && (strings.Contains(normName, "total games") || strings.Contains(normName, "game handicap") || strings.Contains(normName, "set handicap")) {
-		return false, "Tennis games and set handicaps are suspended; only Match Winner is offered"
-	}
-
-	// 6. MMA Method & Rounds
-	if sportID == 6 && (strings.Contains(normName, "method") || strings.Contains(normName, "round") || strings.Contains(normName, "distance")) {
-		return false, "MMA round and method markets are suspended; only Fight Winner is offered"
-	}
-
-	// 7. Rugby Tries (exact match for try / tries)
-	if sportID == 7 && (strings.Contains(normName, "try") || strings.Contains(normName, "tries")) {
-		return false, "Rugby tries markets are suspended; only Match Winner is offered"
-	}
-
-	// 8. Cricket Props
-	if sportID == 8 && (strings.Contains(normName, "six") || strings.Contains(normName, "four") || strings.Contains(normName, "batsman") || strings.Contains(normName, "run")) {
-		return false, "Cricket player and innings props are suspended; only Match Winner is offered"
-	}
-
-	// 9. Exact Authoritative Allowlist Lookup
-	allowlistMu.RLock()
-	defer allowlistMu.RUnlock()
-
-	key := fmt.Sprintf("%d:%s", sportID, normCode)
-	if _, ok := authoritativeAllowlist[key]; ok {
-		return true, ""
-	}
-
-	// Try normalized key replacing spaces, dashes, slashes with underscores
-	sanitizedCode := strings.ReplaceAll(normCode, " - ", "_")
-	sanitizedCode = strings.ReplaceAll(sanitizedCode, "-", "_")
-	sanitizedCode = strings.ReplaceAll(sanitizedCode, " / ", "_")
-	sanitizedCode = strings.ReplaceAll(sanitizedCode, "/", "_")
-	sanitizedCode = strings.ReplaceAll(sanitizedCode, " ", "_")
-	for strings.Contains(sanitizedCode, "__") {
-		sanitizedCode = strings.ReplaceAll(sanitizedCode, "__", "_")
-	}
-	keySanitized := fmt.Sprintf("%d:%s", sportID, sanitizedCode)
-	if _, ok := authoritativeAllowlist[keySanitized]; ok {
-		return true, ""
-	}
-
-	// Also check by canonical catalogue definition if code is normalized canonical code
-	if normPeriod == "" {
-		normPeriod = PeriodFullTime
-	}
-	if def, exists := GetMarketDefinition(sportID, normCode, normPeriod); exists && def.Status == MarketStatusActive {
-		// Ensure a deterministic settlement rule actually exists for this catalogue entry
-		if _, hasRule := Get(sportID, normCode, normPeriod, def.RuleVersion); hasRule {
-			return true, ""
+	// 2. Direct Canonical Capability Registry Check if normCode is a known canonical code
+	extractedLine := ExtractDeterministicLine("", "", rawMarketCode+" "+marketName)
+	if normCode != "" {
+		p := normPeriod
+		if p == "" {
+			p = PeriodFullTime
+		}
+		if def, exists := GetMarketDefinition(sportID, normCode, p); exists {
+			if def.HasLine && extractedLine == nil {
+				return false, fmt.Sprintf("Market '%s' requires a deterministic line parameter", normCode)
+			}
+			allowed, reason := CanPlaceMarketCanonical(MarketPlacementRequest{
+				SportID:             sportID,
+				CanonicalMarketCode: normCode,
+				Period:              p,
+				Line:                extractedLine,
+				RuleVersion:         def.RuleVersion,
+			})
+			return allowed, reason
 		}
 	}
 
-	// Strictly FAIL CLOSED on unknown, unmapped, or fuzzy markets.
-	// No broad string matching (e.g. contains "TOTAL", "GOAL", "WINNER", "HANDICAP") is permitted.
+	// 3. Provider Mapping Entry Point: Normalize raw/provider market code & name to canonical definition
+	mappingResult := MapProviderMarket(ProviderMarketInput{
+		Provider:      ProviderSportyBet,
+		SportID:       sportID,
+		RawMarketName: marketName,
+		RawMarketType: rawMarketCode,
+		Line:          extractedLine,
+	})
+
+	if mappingResult.Mapped && mappingResult.HasRule {
+		p := normPeriod
+		if p == "" {
+			p = mappingResult.Period
+		}
+		allowed, reason := CanPlaceMarketCanonical(MarketPlacementRequest{
+			SportID:             sportID,
+			CanonicalMarketCode: mappingResult.CanonicalMarketCode,
+			Period:              p,
+			Line:                mappingResult.Line,
+			RuleVersion:         mappingResult.RuleVersion,
+		})
+		if !allowed {
+			return false, reason
+		}
+		if mappingResult.Status == MarketStatusActive {
+			return true, ""
+		}
+		return false, mappingResult.Reason
+	}
+
+	// Try with Odibets provider mapping as secondary fallback
+	odiResult := MapProviderMarket(ProviderMarketInput{
+		Provider:      ProviderOdibets,
+		SportID:       sportID,
+		RawMarketName: marketName,
+		RawMarketType: rawMarketCode,
+		Line:          extractedLine,
+	})
+	if odiResult.Mapped && odiResult.HasRule {
+		p := normPeriod
+		if p == "" {
+			p = odiResult.Period
+		}
+		allowed, reason := CanPlaceMarketCanonical(MarketPlacementRequest{
+			SportID:             sportID,
+			CanonicalMarketCode: odiResult.CanonicalMarketCode,
+			Period:              p,
+			Line:                odiResult.Line,
+			RuleVersion:         odiResult.RuleVersion,
+		})
+		if !allowed {
+			return false, reason
+		}
+		if odiResult.Status == MarketStatusActive {
+			return true, ""
+		}
+		return false, odiResult.Reason
+	}
+
+	// Strictly FAIL CLOSED on unknown, unmapped, or unverified markets.
 	return false, fmt.Sprintf("Market '%s' (Sport %d) is not on the verified sportsbook settlement allowlist", rawMarketCode, sportID)
 }
 

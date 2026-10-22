@@ -627,6 +627,9 @@ func (r *FootballHTFTRule) Evaluate(state CanonicalEventState, bet BetSelection)
 	if ht.Home < 0 || ht.Away < 0 {
 		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Negative HT score data detected", RequiredDomain: DomainPeriodScore}
 	}
+	if state.Score.Home < ht.Home || state.Score.Away < ht.Away {
+		return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Inconsistent score data: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
+	}
 
 	htOutcome := "X"
 	if ht.Home > ht.Away {

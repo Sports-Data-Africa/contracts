@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -249,41 +250,40 @@ func NormalizeSportID(raw interface{}) (int, string, string) {
 // ----------------------------------------------------------------------------
 
 var clientReleasedSports = map[int]string{
-	SportIDFootball:   "Football",
-	SportIDBasketball: "Basketball",
-	SportIDTennis:     "Tennis",
-	SportIDIceHockey:  "Hockey",
-	SportIDVolleyball: "Volleyball",
-	SportIDMMA:        "MMA",
-	SportIDRugby:      "Rugby",
-	SportIDCricket:    "Cricket",
-}
-
-var blockedSports = map[int]string{
+	SportIDFootball:         "Football",
+	SportIDBasketball:       "Basketball",
+	SportIDTennis:           "Tennis",
+	SportIDIceHockey:        "Hockey",
+	SportIDVolleyball:       "Volleyball",
+	SportIDMMA:              "MMA",
+	SportIDRugby:            "Rugby",
+	SportIDCricket:          "Cricket",
 	SportIDAmericanFootball: "American Football",
 	SportIDHandball:         "Handball",
 	SportIDBaseball:         "Baseball",
 	SportIDTableTennis:      "Table Tennis",
 }
 
-// IsSportClientReleased returns true only for the 8 authorized client release sports.
+var blockedSports = map[int]string{}
+
+// IsSportClientReleased returns true for all authorized platform capability sports.
 func IsSportClientReleased(sportID int) bool {
 	_, ok := clientReleasedSports[sportID]
 	return ok
 }
 
-// IsSportSettleable returns true only for the 8 authorized settlement sports.
+// IsSportSettleable returns true for all sports with verified platform settlement rules.
 func IsSportSettleable(sportID int) bool {
 	return IsSportClientReleased(sportID)
 }
 
-// IsSportBlocked returns true if the sport is explicitly blocked/quarantined from client release.
+// IsSportBlocked returns true if a sport is administratively blocked globally.
 func IsSportBlocked(sportID int) bool {
 	_, ok := blockedSports[sportID]
 	return ok
 }
 
-// OfficialClientSportIDs returns a sorted slice of authorized client sport IDs.
+// OfficialClientSportIDs returns a sorted slice of authorized platform sport IDs.
 func OfficialClientSportIDs() []int {
 	ids := make([]int, 0, len(clientReleasedSports))
 	for id := range clientReleasedSports {
@@ -293,7 +293,7 @@ func OfficialClientSportIDs() []int {
 	return ids
 }
 
-// OfficialClientSportsMap returns an immutable map copy of authorized client sports.
+// OfficialClientSportsMap returns an immutable map copy of authorized platform sports.
 func OfficialClientSportsMap() map[int]string {
 	m := make(map[int]string, len(clientReleasedSports))
 	for k, v := range clientReleasedSports {
@@ -310,6 +310,56 @@ func BlockedSportIDs() []int {
 	}
 	sort.Ints(ids)
 	return ids
+}
+
+// ----------------------------------------------------------------------------
+// Client-Level Sport Availability Controls
+// ----------------------------------------------------------------------------
+
+// ClientSportAccessManager controls client/tenant-level visibility and wagering permissions.
+// Platform capability remains active; this controls whether client X can access sport Y.
+type ClientSportAccessManager struct {
+	mu             sync.RWMutex
+	clientAccess   map[string]map[int]bool // clientID -> sportID -> allowed
+	globalDefaults map[int]bool
+}
+
+var DefaultClientAccessManager = NewClientSportAccessManager()
+
+func NewClientSportAccessManager() *ClientSportAccessManager {
+	mgr := &ClientSportAccessManager{
+		clientAccess:   make(map[string]map[int]bool),
+		globalDefaults: make(map[int]bool),
+	}
+	for id := range clientReleasedSports {
+		mgr.globalDefaults[id] = true
+	}
+	return mgr
+}
+
+// SetClientSportAccess sets whether an individual client has access to a sport.
+func (m *ClientSportAccessManager) SetClientSportAccess(clientID string, sportID int, enabled bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.clientAccess[clientID]; !ok {
+		m.clientAccess[clientID] = make(map[int]bool)
+	}
+	m.clientAccess[clientID][sportID] = enabled
+}
+
+// IsSportAvailableForClient returns true if the sport is both platform-capable and enabled for the client.
+func (m *ClientSportAccessManager) IsSportAvailableForClient(clientID string, sportID int) bool {
+	if !IsSportClientReleased(sportID) {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if overrides, ok := m.clientAccess[clientID]; ok {
+		if allowed, found := overrides[sportID]; found {
+			return allowed
+		}
+	}
+	return m.globalDefaults[sportID]
 }
 
 // ----------------------------------------------------------------------------

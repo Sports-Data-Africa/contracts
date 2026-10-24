@@ -211,3 +211,18 @@ type SettlementRule interface {
 	Timing() string
 	Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult
 }
+
+// ValidatePeriodScoreMonotonicity enforces that score deltas between successive periods
+// are monotonically non-decreasing. If a cumulative or subsequent period score exhibits
+// a decreasing delta (e.g. FT < HT or Q2 cumulative < Q1), ok returns false, which must
+// trigger SettlementHold under Safety Invariant 10.
+func ValidatePeriodScoreMonotonicity(cumulative ScoreData, prior ScoreData) (delta ScoreData, ok bool) {
+	if cumulative.Home < prior.Home || cumulative.Away < prior.Away {
+		return ScoreData{}, false
+	}
+	return ScoreData{
+		Home: cumulative.Home - prior.Home,
+		Away: cumulative.Away - prior.Away,
+	}, true
+}
+

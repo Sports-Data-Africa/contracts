@@ -40,26 +40,27 @@ func TestIsMarketSettleableAndAllowlisted_Matrix(t *testing.T) {
 		{"Football 1st Half 1X2", 1, "FIRST_HALF_1X2", "1st Half 1X2", true},
 		{"Football 1st Half Over/Under", 1, "1st Half - Over/Under", "1st Half - Over/Under 0.5", true},
 
-		// Blocked / Suspended Markets
-		{"Football Corners Over/Under", 1, "FB_CORNERS_TOTAL", "Corners Over/Under 9.5", false},
-		{"Football Cards Over/Under", 1, "FB_CARDS_TOTAL", "Cards Over/Under 3.5", false},
-		{"Football 2nd Half 1X2", 1, "2ND_HALF_1X2", "2nd Half 1X2", false},
-		{"Basketball 1st Quarter Winner", 2, "Q1_WINNER", "1st Quarter Winner", false},
-		{"Ice Hockey Regulation 1X2", 4, "1X2", "Regulation 1X2 (3-Way)", false},
-		{"Table Tennis Match Winner", 13, "TT_MATCH_WINNER", "Match Winner", false},
-		{"MMA Method of Victory", 6, "MM_METHOD_OF_VICTORY", "Method of Victory", false},
-		{"Rugby Tries", 7, "TOTAL_TRIES", "Total Tries Over/Under", false},
-		{"Cricket Most Sixes", 8, "MOST_SIXES", "Most Sixes", false},
-		{"Tennis Total Games", 3, "TOTAL_GAMES", "Total Games Over/Under", false},
+		// Operation Full Activation — Certified and Released Markets
+		{"Football Corners Over/Under", 1, "FB_CORNERS_TOTAL", "Corners Over/Under 9.5", true},
+		{"Football Cards Over/Under", 1, "FB_CARDS_TOTAL", "Cards Over/Under 3.5", true},
+		{"Football 2nd Half 1X2", 1, "2ND_HALF_1X2", "2nd Half 1X2", true},
+		{"Basketball 1st Quarter Winner", 2, "Q1_WINNER", "1st Quarter Winner", true},
+		{"Ice Hockey Regulation 1X2", 4, "1X2", "Regulation 1X2 (3-Way)", true},
+		{"Table Tennis Match Winner", 13, "TT_MATCH_WINNER", "Match Winner", true},
+		{"MMA Method of Victory", 6, "MM_METHOD_OF_VICTORY", "Method of Victory", true},
+		{"Rugby Tries", 7, "TOTAL_TRIES", "Total Tries Over/Under 4.5", true},
+		{"Cricket Most Sixes", 8, "MOST_SIXES", "Most Sixes", true},
+		{"Tennis Total Games", 3, "TOTAL_GAMES", "Total Games Over/Under 21.5", true},
+		{"American Football Released", 9, "AF_MONEYLINE", "Moneyline", true},
+		{"Handball Released", 10, "HB_1X2", "Match Result", true},
+		{"Baseball Released", 11, "BS_MONEYLINE", "Moneyline", true},
 
 		// Strictly Reject Unknown / Unmapped Fuzzy Markets (No broad regex pass)
 		{"Unmapped Throw-Ins (Contains TOTAL)", 1, "TOTAL_THROW_INS", "Total Throw-Ins Over/Under", false},
 		{"Unmapped Goal Prop (Contains GOAL)", 1, "NEXT_GOALSCORER", "Next Goalscorer", false},
 		{"Unmapped Time Winner (Contains WINNER)", 1, "MINUTE_15_WINNER", "15 Minute Winner", false},
 		{"Unmapped Prop Handicap (Contains HANDICAP)", 1, "CORNER_HANDICAP_PROP", "Corner Handicap Match Bet", false},
-		{"American Football Quarantined", 9, "AF_MONEYLINE", "Moneyline", false},
-		{"Handball Quarantined", 10, "HB_1X2", "Match Result", false},
-		{"Baseball Quarantined", 11, "BS_MONEYLINE", "Moneyline", false},
+		{"Unknown Sport Quarantined", 99, "XX_MONEYLINE", "Moneyline", false},
 	}
 
 	for _, tc := range tests {
@@ -85,13 +86,19 @@ func TestCanPlaceMarket_DirectCapability(t *testing.T) {
 		t.Errorf("expected 1ST_HALF_OVER_UNDER in HT to be allowed, got false: %s", reasonHT)
 	}
 
-	// 3. Suspended unverified period market (2nd half / basketball quarter)
-	allowed2H, _ := CanPlaceMarket(1, "2ND_HALF_TOTAL", "2nd Half Total", PeriodSecondHalf)
-	if allowed2H {
-		t.Errorf("expected 2nd half market to be suspended, got allowed=true")
+	// 3. Certified second half market
+	allowed2H, reason2H := CanPlaceMarket(1, "FB_2H_1X2", "2nd Half 1X2", PeriodSecondHalf)
+	if !allowed2H {
+		t.Errorf("expected FB_2H_1X2 to be allowed under Full Activation, got false: %s", reason2H)
 	}
 
-	// 4. Unmapped novelty market fails closed
+	// 4. Unsupported period fails closed (e.g. Q1 on Football)
+	allowedBadPeriod, _ := CanPlaceMarket(1, "FB_1X2", "Match Winner", PeriodQuarter1)
+	if allowedBadPeriod {
+		t.Errorf("expected unsupported period Q1 on Football to fail closed, got allowed=true")
+	}
+
+	// 5. Unmapped novelty market fails closed
 	allowedNovelty, _ := CanPlaceMarket(1, "YELLOW_CARD_MINUTE", "First Yellow Card Minute", PeriodFullTime)
 	if allowedNovelty {
 		t.Errorf("expected unmapped novelty market to fail closed, got allowed=true")

@@ -1302,20 +1302,59 @@ func TestPhase2SecondHalfTelemetryAndFaultInjection(t *testing.T) {
 		}
 	})
 
-	// 9. All 2H markets are strictly SUSPENDED by capability gate (CanPlaceMarketCanonical returns false)
-	t.Run("All Second-Half markets are strictly SUSPENDED and non-bettable in capability gate", func(t *testing.T) {
+	// 9. All 2H markets are now CERTIFIED and active in capability gate (CanPlaceMarketCanonical returns true)
+	t.Run("Second-Half markets are certified and bettable under Full Activation", func(t *testing.T) {
 		reqs := []MarketPlacementRequest{
 			{SportID: 1, CanonicalMarketCode: "FB_2H_1X2", Period: PeriodSecondHalf},
 			{SportID: 1, CanonicalMarketCode: "FB_TOTAL_GOALS", Period: PeriodSecondHalf, Line: floatPtr(1.5)},
 		}
 		for _, req := range reqs {
 			allowed, reason := CanPlaceMarketCanonical(req)
-			if allowed {
-				t.Errorf("expected market %s (period %s) to be rejected by capability gate, but was allowed", req.CanonicalMarketCode, req.Period)
+			if !allowed {
+				t.Errorf("expected market %s (period %s) to be allowed under Full Activation, got rejected: %s", req.CanonicalMarketCode, req.Period, reason)
 			}
-			if !strings.Contains(reason, "2H") || !strings.Contains(reason, "suspended") {
-				t.Errorf("expected rejection reason containing '2H' and 'suspended', got '%s'", reason)
-			}
+		}
+
+		// Rejection applies fail-closed to uncertified/unsupported period (e.g. Q1 on Football)
+		badReq := MarketPlacementRequest{SportID: 1, CanonicalMarketCode: "FB_1X2", Period: PeriodQuarter1}
+		badAllowed, badReason := CanPlaceMarketCanonical(badReq)
+		if badAllowed {
+			t.Errorf("expected uncertified period Q1 on Football to fail closed, but was allowed")
+		}
+		if !strings.Contains(badReason, "suspended") && !strings.Contains(badReason, "Period") {
+			t.Errorf("expected rejection reason for unsupported period, got '%s'", badReason)
+		}
+	})
+
+	// 10. Monotonicity Invariant: Decreasing delta (FT < HT) triggers SettlementHold
+	t.Run("Monotonicity Invariant: Decreasing Period Score Delta Triggers SettlementHold", func(t *testing.T) {
+		decreasingState := CanonicalEventState{
+			CanonicalFixtureID: "SPD-FB-MONO-FAIL",
+			SportID:            1,
+			Status:             FixtureStatusFT,
+			IsFinished:         true,
+			Score:              ScoreData{Home: 0, Away: 1}, // Contradiction: Home score decreased from 1 to 0
+			PeriodScores: map[string]ScoreData{
+				"1H": {Home: 1, Away: 0},
+			},
+			ScoreConfirmedAt: time.Now(),
+		}
+		bet2H := BetSelection{
+			SportID:             1,
+			CanonicalMarketCode: "FB_2H_1X2",
+			Period:              PeriodSecondHalf,
+			SelectionCode:       "1",
+			RuleVersion:         1,
+		}
+		res, err := Evaluate(decreasingState, bet2H)
+		if err != nil {
+			t.Fatalf("unexpected evaluate error: %v", err)
+		}
+		if res.Status != BetStatusSettlementHold {
+			t.Errorf("expected BetStatusSettlementHold on decreasing delta, got %s", res.Status)
+		}
+		if !strings.Contains(res.Reason, "monotonicity violation") && !strings.Contains(res.Reason, "less than half-time") {
+			t.Errorf("expected monotonicity violation reason, got '%s'", res.Reason)
 		}
 	})
 }

@@ -13,6 +13,7 @@ func init() {
 	Register(&RugbyHandicapRule{})
 	Register(&RugbyTotalsRule{})
 	Register(&RugbyHT1X2Rule{})
+	Register(&RugbyTotalTriesRule{})
 }
 
 // ----------------------------------------------------------------------------
@@ -187,4 +188,59 @@ func (r *RugbyHT1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection) S
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 	}
 	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Rugby Total Tries (EVENT_END - DomainTeamStats)
+// ----------------------------------------------------------------------------
+type RugbyTotalTriesRule struct{}
+
+func (r *RugbyTotalTriesRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 7, MarketCode: "RB_TOTAL_TRIES", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *RugbyTotalTriesRule) RequiredDomain() string { return DomainTeamStats }
+func (r *RugbyTotalTriesRule) Timing() string         { return TimingInstantIrreversible }
+
+func (r *RugbyTotalTriesRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	tries := 0
+	if state.TeamStats != nil {
+		if tHome, ok := state.TeamStats["home"]["tries"]; ok {
+			tries += tHome
+		}
+		if tAway, ok := state.TeamStats["away"]["tries"]; ok {
+			tries += tAway
+		}
+	}
+	line := 4.5
+	if bet.Line != nil {
+		line = *bet.Line
+	}
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+
+	if sel == "OVER" && float64(tries) > line {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingInstantIrreversible, RequiredDomain: DomainTeamStats, EvaluatedAt: time.Now()}
+	}
+	if sel == "UNDER" && float64(tries) > line {
+		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, RequiredDomain: DomainTeamStats, EvaluatedAt: time.Now()}
+	}
+
+	if state.IsFinished {
+		switch sel {
+		case "OVER":
+			if float64(tries) > line {
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainTeamStats, EvaluatedAt: time.Now()}
+			} else if float64(tries) == line {
+				return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainTeamStats, EvaluatedAt: time.Now()}
+			}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainTeamStats, EvaluatedAt: time.Now()}
+		case "UNDER":
+			if float64(tries) < line {
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainTeamStats, EvaluatedAt: time.Now()}
+			} else if float64(tries) == line {
+				return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainTeamStats, EvaluatedAt: time.Now()}
+			}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainTeamStats, EvaluatedAt: time.Now()}
+		}
+	}
+	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: DomainTeamStats}
 }

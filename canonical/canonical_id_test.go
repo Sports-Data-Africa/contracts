@@ -179,7 +179,7 @@ func TestNormalizeSportIDStrict_UnknownFailsClosed(t *testing.T) {
 }
 
 func TestSportReleasePolicy(t *testing.T) {
-	// Exactly the 8 client release sports return true
+	// All 12 platform sports are platform-capable and settleable
 	expectedReleased := []int{
 		SportIDFootball,
 		SportIDBasketball,
@@ -189,34 +189,21 @@ func TestSportReleasePolicy(t *testing.T) {
 		SportIDMMA,
 		SportIDRugby,
 		SportIDCricket,
-	}
-
-	for _, id := range expectedReleased {
-		if !IsSportClientReleased(id) {
-			t.Errorf("expected sport %d to be client released", id)
-		}
-		if !IsSportSettleable(id) {
-			t.Errorf("expected sport %d to be settleable", id)
-		}
-		if IsSportBlocked(id) {
-			t.Errorf("sport %d should not be blocked", id)
-		}
-	}
-
-	// Blocked sports return false for client release and true for blocked
-	expectedBlocked := []int{
 		SportIDAmericanFootball,
 		SportIDHandball,
 		SportIDBaseball,
 		SportIDTableTennis,
 	}
 
-	for _, id := range expectedBlocked {
-		if IsSportClientReleased(id) {
-			t.Errorf("blocked sport %d must not be client released", id)
+	for _, id := range expectedReleased {
+		if !IsSportClientReleased(id) {
+			t.Errorf("expected sport %d to be platform released", id)
 		}
-		if !IsSportBlocked(id) {
-			t.Errorf("sport %d must be marked blocked", id)
+		if !IsSportSettleable(id) {
+			t.Errorf("expected sport %d to be settleable", id)
+		}
+		if IsSportBlocked(id) {
+			t.Errorf("sport %d should not be blocked globally", id)
 		}
 	}
 
@@ -229,8 +216,8 @@ func TestSportReleasePolicy(t *testing.T) {
 
 	// Check OfficialClientSportIDs count and order
 	ids := OfficialClientSportIDs()
-	if len(ids) != 8 {
-		t.Fatalf("expected 8 official client sports, got %d", len(ids))
+	if len(ids) != 12 {
+		t.Fatalf("expected 12 platform sports, got %d", len(ids))
 	}
 	for i := 1; i < len(ids); i++ {
 		if ids[i] <= ids[i-1] {

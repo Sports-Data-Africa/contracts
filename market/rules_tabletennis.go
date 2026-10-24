@@ -9,11 +9,14 @@ import (
 func init() {
 	// Register Table Tennis (SportID 13) Rules
 	Register(&TableTennisMatchWinnerRule{})
-	Register(&TableTennisGameWinnerRule{GameNumber: 1, Period: "GAME1"})
-	Register(&TableTennisGameWinnerRule{GameNumber: 2, Period: "GAME2"})
-	Register(&TableTennisGameWinnerRule{GameNumber: 3, Period: "GAME3"})
-	Register(&TableTennisGameWinnerRule{GameNumber: 4, Period: "GAME4"})
-	Register(&TableTennisGameWinnerRule{GameNumber: 5, Period: "GAME5"})
+	Register(&TableTennisGameWinnerRule{GameNumber: 1, Period: "GAME1", MarketCode: "TT_GAME_WINNER"})
+	Register(&TableTennisGameWinnerRule{GameNumber: 1, Period: "GAME1", MarketCode: "TT_MATCH_WINNER"})
+	Register(&TableTennisGameWinnerRule{GameNumber: 1, Period: "SET1", MarketCode: "TT_GAME_WINNER"})
+	Register(&TableTennisGameWinnerRule{GameNumber: 1, Period: "SET1", MarketCode: "TT_MATCH_WINNER"})
+	Register(&TableTennisGameWinnerRule{GameNumber: 2, Period: "GAME2", MarketCode: "TT_GAME_WINNER"})
+	Register(&TableTennisGameWinnerRule{GameNumber: 3, Period: "GAME3", MarketCode: "TT_GAME_WINNER"})
+	Register(&TableTennisGameWinnerRule{GameNumber: 4, Period: "GAME4", MarketCode: "TT_GAME_WINNER"})
+	Register(&TableTennisGameWinnerRule{GameNumber: 5, Period: "GAME5", MarketCode: "TT_GAME_WINNER"})
 	Register(&TableTennisTotalPointsRule{})
 	Register(&TableTennisPointHandicapRule{})
 	Register(&TableTennisGameHandicapRule{})
@@ -51,10 +54,19 @@ func (r *TableTennisMatchWinnerRule) Evaluate(state CanonicalEventState, bet Bet
 type TableTennisGameWinnerRule struct {
 	GameNumber int
 	Period     string
+	MarketCode string
 }
 
 func (r *TableTennisGameWinnerRule) Key() MarketRuleKey {
-	return MarketRuleKey{SportID: 13, MarketCode: "TT_GAME_WINNER", Period: r.Period, RuleVersion: 1}
+	code := r.MarketCode
+	if code == "" {
+		code = "TT_GAME_WINNER"
+	}
+	p := r.Period
+	if p == "" {
+		p = fmt.Sprintf("GAME%d", r.GameNumber)
+	}
+	return MarketRuleKey{SportID: 13, MarketCode: code, Period: p, RuleVersion: 1}
 }
 func (r *TableTennisGameWinnerRule) RequiredDomain() string { return DomainPoints }
 func (r *TableTennisGameWinnerRule) Timing() string         { return TimingPeriodEnd }
@@ -62,9 +74,27 @@ func (r *TableTennisGameWinnerRule) Timing() string         { return TimingPerio
 func (r *TableTennisGameWinnerRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
 	gKey := fmt.Sprintf("G%d", r.GameNumber)
 	gScore, ok := state.PeriodScores[gKey]
-	isGameDone := state.IsPeriodFinished[r.Period] || state.IsFinished
+	if !ok {
+		gScore, ok = state.PeriodScores[fmt.Sprintf("%d", r.GameNumber)]
+	}
+	if !ok {
+		gScore, ok = state.PeriodScores[fmt.Sprintf("SET%d", r.GameNumber)]
+	}
 
-	if !ok || !isGameDone {
+	isGameDone := state.IsPeriodFinished[r.Period] || state.IsPeriodFinished[fmt.Sprintf("GAME%d", r.GameNumber)] || state.IsFinished
+
+	if !ok {
+		// Fail-closed: missing Game N score must NEVER fallback to match sets score
+		return SettlementResult{
+			Status:         BetStatusSettlementHold,
+			Settled:        false,
+			Reason:         fmt.Sprintf("Missing Game %d period score data for Table Tennis game winner", r.GameNumber),
+			Timing:         TimingPeriodEnd,
+			RequiredDomain: DomainPoints,
+		}
+	}
+
+	if !isGameDone {
 		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainPoints}
 	}
 

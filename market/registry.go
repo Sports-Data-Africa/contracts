@@ -47,6 +47,10 @@ func (r *Registry) Get(sportID int, marketCode, period string, ruleVersion int) 
 	normPeriod := strings.ToUpper(strings.TrimSpace(period))
 	if normPeriod == "" {
 		normPeriod = PeriodFullTime
+	} else if normPeriod == "1H" || normPeriod == "FIRST_HALF" {
+		normPeriod = PeriodHalfTime
+	} else if normPeriod == "2H" || normPeriod == "SECOND_HALF" {
+		normPeriod = PeriodSecondHalf
 	}
 	if ruleVersion <= 0 {
 		ruleVersion = 1

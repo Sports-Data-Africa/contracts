@@ -569,10 +569,11 @@ func (r *Football2H1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection
 			ht, okHT = state.PeriodScores["HT"]
 		}
 		if okHT {
-			if state.Score.Home < ht.Home || state.Score.Away < ht.Away {
-				return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Inconsistent score data: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
+			h2Delta, okMono := ValidatePeriodScoreMonotonicity(state.Score, ht)
+			if !okMono {
+				return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Period score delta monotonicity violation: Full-time score is less than half-time score", RequiredDomain: DomainPeriodScore}
 			}
-			h2 = ScoreData{Home: state.Score.Home - ht.Home, Away: state.Score.Away - ht.Away}
+			h2 = h2Delta
 		} else {
 			return SettlementResult{Status: BetStatusSettlementHold, Settled: false, Reason: "Missing 1H score to derive 2H result", RequiredDomain: DomainPeriodScore}
 		}

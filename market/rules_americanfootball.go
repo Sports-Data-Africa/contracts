@@ -10,7 +10,8 @@ func init() {
 	// Register American Football (SportID 9) Rules
 	Register(&AmericanFootballMoneylineRule{IncludesOT: true})
 	Register(&AmericanFootballSpreadRule{IncludesOT: true})
-	Register(&AmericanFootballTotalsRule{IncludesOT: true})
+	Register(&AmericanFootballTotalsRule{Period: PeriodFullTime, IncludesOT: true})
+	Register(&AmericanFootballTotalsRule{Period: PeriodHalfTime, IncludesOT: false})
 	Register(&AmericanFootballQuarterWinnerRule{Quarter: PeriodQuarter1})
 	Register(&AmericanFootballQuarterWinnerRule{Quarter: PeriodQuarter2})
 	Register(&AmericanFootballQuarterWinnerRule{Quarter: PeriodQuarter3})
@@ -87,20 +88,64 @@ func (r *AmericanFootballSpreadRule) Evaluate(state CanonicalEventState, bet Bet
 }
 
 // ----------------------------------------------------------------------------
-// Total Points (INSTANT_IRREVERSIBLE - includes overtime)
+// ----------------------------------------------------------------------------
+// Total Points (INSTANT_IRREVERSIBLE - includes overtime for FT, regulation for HT)
 // ----------------------------------------------------------------------------
 type AmericanFootballTotalsRule struct {
+	Period     string
 	IncludesOT bool
 }
 
 func (r *AmericanFootballTotalsRule) Key() MarketRuleKey {
-	return MarketRuleKey{SportID: 9, MarketCode: "AF_TOTAL_POINTS", Period: PeriodFullTime, RuleVersion: 1}
+	p := r.Period
+	if p == "" {
+		p = PeriodFullTime
+	}
+	return MarketRuleKey{SportID: 9, MarketCode: "AF_TOTAL_POINTS", Period: p, RuleVersion: 1}
 }
-func (r *AmericanFootballTotalsRule) RequiredDomain() string { return DomainScore }
-func (r *AmericanFootballTotalsRule) Timing() string         { return TimingInstantIrreversible }
+func (r *AmericanFootballTotalsRule) RequiredDomain() string {
+	if r.Period == PeriodHalfTime {
+		return DomainPeriodScore
+	}
+	return DomainScore
+}
+func (r *AmericanFootballTotalsRule) Timing() string { return TimingInstantIrreversible }
 
 func (r *AmericanFootballTotalsRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
-	current := state.Score.Home + state.Score.Away
+	var current int
+	var isPeriodDone bool
+
+	if r.Period == PeriodHalfTime {
+		ht, ok := state.PeriodScores["1H"]
+		if !ok {
+			ht, ok = state.PeriodScores["HT"]
+		}
+		if !ok {
+			// Sum Q1 + Q2 if available
+			q1, ok1 := state.PeriodScores["Q1"]
+			q2, ok2 := state.PeriodScores["Q2"]
+			if ok1 && ok2 {
+				ht = ScoreData{Home: q1.Home + q2.Home, Away: q1.Away + q2.Away}
+				ok = true
+			}
+		}
+		if !ok {
+			// Fail-closed: missing 1H period score must NEVER fallback to full-time score
+			return SettlementResult{
+				Status:         BetStatusSettlementHold,
+				Settled:        false,
+				Reason:         "Missing 1H period score data for American Football half-time totals",
+				Timing:         TimingPeriodEnd,
+				RequiredDomain: DomainPeriodScore,
+			}
+		}
+		current = ht.Home + ht.Away
+		isPeriodDone = state.IsPeriodFinished[PeriodHalfTime] || state.Status == FixtureStatusHT || state.IsFinished
+	} else {
+		current = state.Score.Home + state.Score.Away
+		isPeriodDone = state.IsFinished
+	}
+
 	line := 45.5
 	if bet.Line != nil {
 		line = *bet.Line
@@ -108,32 +153,32 @@ func (r *AmericanFootballTotalsRule) Evaluate(state CanonicalEventState, bet Bet
 	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
 
 	if sel == "OVER" && float64(current) > line {
-		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingInstantIrreversible, Reason: fmt.Sprintf("American Football points (%d) exceeded line (%.1f)", current, line), RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingInstantIrreversible, Reason: fmt.Sprintf("American Football points (%d) exceeded line (%.1f)", current, line), RequiredDomain: r.RequiredDomain(), EvaluatedAt: time.Now()}
 	}
 	if sel == "UNDER" && float64(current) > line {
-		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, Reason: fmt.Sprintf("American Football points (%d) exceeded line (%.1f)", current, line), RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, Reason: fmt.Sprintf("American Football points (%d) exceeded line (%.1f)", current, line), RequiredDomain: r.RequiredDomain(), EvaluatedAt: time.Now()}
 	}
 
-	if state.IsFinished {
+	if isPeriodDone {
 		switch sel {
 		case "OVER":
 			if float64(current) > line {
-				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: r.RequiredDomain(), EvaluatedAt: time.Now()}
 			} else if float64(current) == line {
-				return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+				return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: r.RequiredDomain(), EvaluatedAt: time.Now()}
 			}
-			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: r.RequiredDomain(), EvaluatedAt: time.Now()}
 		case "UNDER":
 			if float64(current) < line {
-				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: r.RequiredDomain(), EvaluatedAt: time.Now()}
 			} else if float64(current) == line {
-				return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+				return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: r.RequiredDomain(), EvaluatedAt: time.Now()}
 			}
-			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: r.RequiredDomain(), EvaluatedAt: time.Now()}
 		}
 	}
 
-	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: DomainScore}
+	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: r.RequiredDomain()}
 }
 
 // ----------------------------------------------------------------------------

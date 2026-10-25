@@ -180,17 +180,17 @@ func TestPhase2_03_UnknownAndQuarantinedMarketsFailClosed(t *testing.T) {
 		t.Errorf("Player prop must be DISABLED_UNSUPPORTED in shadow mode, got: %s", resProp.Status)
 	}
 
-	// Early Payout Special: 1X2 - 2UP (ID 60100)
+	// Exotic Early Payout Special: 1X2 - Never Down (ID 60210) remains disabled/unsupported
 	inputSpecial := market.ProviderMarketInput{
 		Provider:       market.ProviderSportyBet,
 		SportID:        1,
-		RawMarketID:    "60100",
-		RawMarketName:  "1X2 - 2UP",
+		RawMarketID:    "60210",
+		RawMarketName:  "1X2 - Never Down",
 		RawOutcomeName: "Home",
 	}
 	resSpecial := market.MapProviderMarket(inputSpecial)
 	if resSpecial.Status != market.MarketStatusDisabledUnsupported {
-		t.Errorf("Early payout special must be DISABLED_UNSUPPORTED in shadow mode, got: %s", resSpecial.Status)
+		t.Errorf("Exotic special must be DISABLED_UNSUPPORTED, got: %s", resSpecial.Status)
 	}
 }
 

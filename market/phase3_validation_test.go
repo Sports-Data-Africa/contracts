@@ -106,9 +106,9 @@ func TestPhase3_QuarantinedMarketsFailClosed(t *testing.T) {
 		{"Player Prop: Anytime Scorer", 1, "892", "Anytime Goalscorer", "player=1002"},
 		{"Player Prop: Player to Score", 1, "893", "Player to score a brace", "player=1003"},
 
-		// Early Payout Specials (quarantined)
-		{"Early Payout: 2up Special", 1, "60100", "2 Goals Ahead Early Payout", ""},
-		{"Early Payout: Never Down", 1, "60200", "Never Down Early Payout", ""},
+		// Early Payout Exotic Specials (quarantined)
+		{"Early Payout: Never Down", 1, "60210", "1X2 - Never Down", ""},
+		{"Early Payout: Double Chance 1UP", 1, "60110", "Double Chance 1UP", ""},
 
 		// Exotic Combinations (quarantined)
 		{"Exotic Combo: Ice Hockey 1st Goal (OT/Pen)", 4, "407", "1st goal (incl. overtime and penalties)", "goalnr=1"},

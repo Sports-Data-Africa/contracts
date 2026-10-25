@@ -156,7 +156,7 @@ func MapProviderMarket(input ProviderMarketInput) CanonicalMarketMappingResult {
 
 	// Check canonical catalogue definition
 	def, exists := GetMarketDefinition(sportID, canonicalCode, period)
-	if !exists || def.Status != MarketStatusActive {
+	if !exists {
 		return CanonicalMarketMappingResult{
 			Provider:            provider,
 			ProviderMarketID:    input.RawMarketID,
@@ -168,7 +168,66 @@ func MapProviderMarket(input ProviderMarketInput) CanonicalMarketMappingResult {
 			HasRule:             false,
 			CanonicalMarketCode: canonicalCode,
 			Period:              period,
-			Reason:              fmt.Sprintf("NO_ACTIVE_CATALOGUE_DEF for code=%s, period=%s", canonicalCode, period),
+			Reason:              fmt.Sprintf("NO_CATALOGUE_DEF for code=%s, period=%s", canonicalCode, period),
+		}
+	}
+	if def.Status == MarketStatusQuarantined {
+		return CanonicalMarketMappingResult{
+			Provider:            provider,
+			ProviderMarketID:    input.RawMarketID,
+			ProviderOutcomeID:   input.RawOutcomeID,
+			RawPayloadHash:      input.RawPayloadHash,
+			SportID:             sportID,
+			Status:              MarketStatusQuarantined,
+			Mapped:              true,
+			HasRule:             true,
+			CanonicalMarketCode: canonicalCode,
+			CanonicalMarketName: def.MarketName,
+			Period:              period,
+			NormalizedSelection: normSel,
+			Reason:              "QUARANTINED_PENDING_PROVIDER_1UP_CONTRACT_VERIFICATION: 1UP promotional rules require verified interval contract from provider",
+		}
+	}
+	if def.Status == MarketStatusShadow {
+		rule, hasRule := Get(sportID, canonicalCode, period, def.RuleVersion)
+		reqDom := DomainScore
+		timing := TimingInstantIrreversible
+		if hasRule {
+			reqDom = rule.RequiredDomain()
+			timing = rule.Timing()
+		}
+		return CanonicalMarketMappingResult{
+			Provider:            provider,
+			ProviderMarketID:    input.RawMarketID,
+			ProviderOutcomeID:   input.RawOutcomeID,
+			RawPayloadHash:      input.RawPayloadHash,
+			SportID:             sportID,
+			Status:              MarketStatusShadow,
+			Mapped:              true,
+			HasRule:             hasRule,
+			CanonicalMarketCode: canonicalCode,
+			CanonicalMarketName: def.MarketName,
+			Period:              period,
+			NormalizedSelection: normSel,
+			RequiredDomain:      reqDom,
+			SettlementTiming:    timing,
+			RuleVersion:         def.RuleVersion,
+			Reason:              "SHADOW_EVALUATION_ONLY: early payout 2UP settlement certified in shadow mode; live wagering gated",
+		}
+	}
+	if def.Status != MarketStatusActive {
+		return CanonicalMarketMappingResult{
+			Provider:            provider,
+			ProviderMarketID:    input.RawMarketID,
+			ProviderOutcomeID:   input.RawOutcomeID,
+			RawPayloadHash:      input.RawPayloadHash,
+			SportID:             sportID,
+			Status:              def.Status,
+			Mapped:              false,
+			HasRule:             false,
+			CanonicalMarketCode: canonicalCode,
+			Period:              period,
+			Reason:              fmt.Sprintf("CATALOGUE_DEF_%s for code=%s, period=%s", def.Status, canonicalCode, period),
 		}
 	}
 
@@ -274,9 +333,16 @@ func MapProviderMarket(input ProviderMarketInput) CanonicalMarketMappingResult {
 func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, string) {
 	normSel := normalizeSelection(rawSel)
 
-	// Strict Safeguard: Early Payout Specials and Player Props must NEVER collapse into generic 1X2, Moneyline, or Totals.
-	if strings.Contains(normDesc, "2up") || strings.Contains(normDesc, "1up") || strings.Contains(normDesc, "never down") ||
-		strings.HasPrefix(rawID, "601") || strings.HasPrefix(rawID, "602") {
+	// Early Payout Specials: Map to separate canonical markets FB_1X2_2UP and FB_1X2_1UP; NEVER collapse into generic 1X2.
+	if sportID == 1 {
+		if rawID == "60100" || (strings.Contains(normDesc, "2up") && !strings.Contains(normDesc, "1up")) {
+			return "FB_1X2_2UP", PeriodFullTime, rawSel
+		}
+		if rawID == "60200" || strings.Contains(normDesc, "1up") {
+			return "FB_1X2_1UP", PeriodFullTime, rawSel
+		}
+	}
+	if strings.Contains(normDesc, "never down") || strings.HasPrefix(rawID, "601") || strings.HasPrefix(rawID, "602") {
 		return "", "", ""
 	}
 	if strings.Contains(normDesc, "goalscorer") || strings.Contains(normDesc, "player to score") || strings.Contains(normDesc, "player ") || strings.Contains(normDesc, "anytime goal") || strings.HasPrefix(rawID, "89") {

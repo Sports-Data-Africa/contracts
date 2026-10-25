@@ -133,6 +133,31 @@ type MMAStateData struct {
 	OfficialResultCertified bool   `json:"official_result_certified"`
 }
 
+// GoalTimelineEntry captures an authoritative, ordered goal occurrence in a match.
+type GoalTimelineEntry struct {
+	Sequence       int64     `json:"sequence"`        // Strictly monotonic event sequence
+	Minute         int       `json:"minute"`          // Match minute (1-90+)
+	Period         string    `json:"period"`          // 1H, 2H, ET, etc.
+	ScoringTeam    string    `json:"scoring_team"`    // "HOME" or "AWAY"
+	HomeScoreAfter int       `json:"home_score_after"`
+	AwayScoreAfter int       `json:"away_score_after"`
+	IsOverturned   bool      `json:"is_overturned"`   // true if VAR or referee reversed this goal
+	ConfirmedAt    time.Time `json:"confirmed_at"`    // Timestamp of official event confirmation
+	EventID        string    `json:"event_id"`        // Provider unique event ID for deduplication
+}
+
+// EarlyPayoutTelemetry captures timeline tracking and qualifying trigger state for early settlement promotions.
+type EarlyPayoutTelemetry struct {
+	HomeTwoGoalLeadAchieved bool                `json:"home_two_goal_lead_achieved"`
+	AwayTwoGoalLeadAchieved bool                `json:"away_two_goal_lead_achieved"`
+	HomeLeadTriggerMinute   int                 `json:"home_lead_trigger_minute,omitempty"`
+	AwayLeadTriggerMinute   int                 `json:"away_lead_trigger_minute,omitempty"`
+	TriggerSequence         int64               `json:"trigger_sequence,omitempty"`
+	GoalTimeline            []GoalTimelineEntry `json:"goal_timeline"`
+	TimelineReliable        bool                `json:"timeline_reliable"` // false if provider timeline has gaps, sequence jumps, or missing history
+	ProviderTriggerTag      string              `json:"provider_trigger_tag,omitempty"` // Explicit upstream flag if provided (e.g., "HOME_2UP_QUALIFIED")
+}
+
 // ProviderEvidenceData retains audit evidence for traceability back to provider messages.
 type ProviderEvidenceData struct {
 	Provider          string    `json:"provider"`
@@ -166,6 +191,7 @@ type CanonicalEventState struct {
 	Cricket            *CricketStateData         `json:"cricket,omitempty"`
 	Baseball           *BaseballStateData        `json:"baseball,omitempty"`
 	MMA                *MMAStateData             `json:"mma,omitempty"`
+	EarlyPayout        *EarlyPayoutTelemetry     `json:"early_payout,omitempty"`
 	ProviderEvidence   []ProviderEvidenceData    `json:"provider_evidence"`
 	ScoreConfirmedAt   time.Time                 `json:"score_confirmed_at"`
 	LastUpdatedAt      time.Time                 `json:"last_updated_at"`

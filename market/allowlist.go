@@ -25,6 +25,12 @@ var (
 		// 1. Football (SportID 1)
 		"1:1X2":                 {SportID: 1, SportName: "Football", MarketCode: "1X2", Period: PeriodFullTime, Rationale: "Full-time FT score confirmed by Sportradar wire"},
 		"1:FB_1X2":              {SportID: 1, SportName: "Football", MarketCode: "FB_1X2", Period: PeriodFullTime, Rationale: "Full-time FT score confirmed by Sportradar wire"},
+		"1:FB_1X2_2UP":          {SportID: 1, SportName: "Football", MarketCode: "FB_1X2_2UP", Period: PeriodFullTime, Rationale: "Early payout 2-goal lead or FT fallback supported with timeline verification"},
+		"1:2UP":                 {SportID: 1, SportName: "Football", MarketCode: "FB_1X2_2UP", Period: PeriodFullTime, Rationale: "Early payout 2-goal lead or FT fallback supported with timeline verification"},
+		"1:60100":               {SportID: 1, SportName: "Football", MarketCode: "FB_1X2_2UP", Period: PeriodFullTime, Rationale: "Early payout 2-goal lead or FT fallback supported with timeline verification"},
+		"1:FB_1X2_1UP":          {SportID: 1, SportName: "Football", MarketCode: "FB_1X2_1UP", Period: PeriodFullTime, Rationale: "Early payout 1-goal lead or FT fallback supported with timeline verification"},
+		"1:1UP":                 {SportID: 1, SportName: "Football", MarketCode: "FB_1X2_1UP", Period: PeriodFullTime, Rationale: "Early payout 1-goal lead or FT fallback supported with timeline verification"},
+		"1:60200":               {SportID: 1, SportName: "Football", MarketCode: "FB_1X2_1UP", Period: PeriodFullTime, Rationale: "Early payout 1-goal lead or FT fallback supported with timeline verification"},
 		"1:MATCH_RESULT":        {SportID: 1, SportName: "Football", MarketCode: "MATCH_RESULT", Period: PeriodFullTime, Rationale: "Full-time FT score confirmed by Sportradar wire"},
 		"1:MATCH_WINNER":        {SportID: 1, SportName: "Football", MarketCode: "MATCH_WINNER", Period: PeriodFullTime, Rationale: "Full-time FT score confirmed by Sportradar wire"},
 		"1:OVER_UNDER":          {SportID: 1, SportName: "Football", MarketCode: "OVER_UNDER", Period: PeriodFullTime, Rationale: "Full-time FT score confirmed by Sportradar wire"},

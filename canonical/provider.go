@@ -84,7 +84,7 @@ func DefaultProviderRegistry() *ProviderRegistry {
 			EnvPrefix:          "SPORTSXBET_",
 			LegacyAliases:      []string{LegacyProviderSportyBet}, // Exactly ONE legacy alias: "SPORTYBET"
 			IsEnabled:          true,
-			SupportedSports:    []int{1, 2, 3, 4, 5, 7, 9, 12, 13},
+			SupportedSports:    []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13},
 			Description:        "Primary commercial odds and prematch/live feed provider",
 		})
 
@@ -97,7 +97,7 @@ func DefaultProviderRegistry() *ProviderRegistry {
 			EnvPrefix:          "ODDIXBETS_",
 			LegacyAliases:      []string{LegacyProviderOdibets}, // Exactly ONE legacy alias: "ODIBETS"
 			IsEnabled:          true,
-			SupportedSports:    []int{1, 2, 3},
+			SupportedSports:    []int{1, 2, 3, 7},
 			Description:        "Secondary commercial feed and failover odds provider",
 		})
 	})

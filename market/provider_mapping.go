@@ -333,16 +333,21 @@ func MapProviderMarket(input ProviderMarketInput) CanonicalMarketMappingResult {
 func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, string) {
 	normSel := normalizeSelection(rawSel)
 
+	// Quarantined exotic variations (Never Down, Double Chance 1UP) must fail closed and never map to standard 1UP/2UP
+	if strings.Contains(normDesc, "never down") || (strings.Contains(normDesc, "double chance") && strings.Contains(normDesc, "1up")) || rawID == "60210" || rawID == "60110" {
+		return "", "", ""
+	}
+
 	// Early Payout Specials: Map to separate canonical markets FB_1X2_2UP and FB_1X2_1UP; NEVER collapse into generic 1X2.
 	if sportID == 1 {
 		if rawID == "60100" || (strings.Contains(normDesc, "2up") && !strings.Contains(normDesc, "1up")) {
 			return "FB_1X2_2UP", PeriodFullTime, rawSel
 		}
-		if rawID == "60200" || strings.Contains(normDesc, "1up") {
+		if rawID == "60200" || (strings.Contains(normDesc, "1up") && !strings.Contains(normDesc, "double chance")) {
 			return "FB_1X2_1UP", PeriodFullTime, rawSel
 		}
 	}
-	if strings.Contains(normDesc, "never down") || strings.HasPrefix(rawID, "601") || strings.HasPrefix(rawID, "602") {
+	if strings.HasPrefix(rawID, "601") || strings.HasPrefix(rawID, "602") {
 		return "", "", ""
 	}
 	if strings.Contains(normDesc, "goalscorer") || strings.Contains(normDesc, "player to score") || strings.Contains(normDesc, "player ") || strings.Contains(normDesc, "anytime goal") || strings.HasPrefix(rawID, "89") {
@@ -736,6 +741,11 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 
 func mapOdibets(sportID int, rawID, normDesc, rawSel string) (string, string, string) {
 	normSel := normalizeSelection(rawSel)
+
+	// Quarantined exotic variations (Never Down, Double Chance 1UP) must fail closed
+	if strings.Contains(normDesc, "never down") || (strings.Contains(normDesc, "double chance") && strings.Contains(normDesc, "1up")) || rawID == "60210" || rawID == "60110" {
+		return "", "", ""
+	}
 
 	switch sportID {
 	case 1: // Football

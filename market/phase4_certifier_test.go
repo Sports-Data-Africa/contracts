@@ -96,12 +96,12 @@ type ShadowReconciliationItem struct {
 	ExpectedPayout        float64  `json:"expected_payout"`
 	ShadowEvaluatedStatus string   `json:"shadow_evaluated_status"`
 	ShadowEvaluatedPayout float64  `json:"shadow_evaluated_payout"`
-	DiscrepancySeverity   string   `json:"discrepancy_severity"` // NONE, MINOR, CRITICAL
+	DiscrepancySeverity   string   `json:"discrepancy_severity"`  // NONE, MINOR, CRITICAL
 	ReconciliationStatus  string   `json:"reconciliation_status"` // MATCH, REVIEW, HELD
 	EvaluatorVersion      int      `json:"evaluator_version"`
-	EvaluationScope       string   `json:"evaluation_scope"`   // CERTIFIED_MARKET_RECONCILIATION, RULE_LEVEL_TEST_UNOBSERVED
-	TestType              string   `json:"test_type"`          // SIMULATED_SCENARIO_TEST
-	DataSource            string   `json:"data_source"`        // SIMULATED_TEST_DOUBLE
+	EvaluationScope       string   `json:"evaluation_scope"` // CERTIFIED_MARKET_RECONCILIATION, RULE_LEVEL_TEST_UNOBSERVED
+	TestType              string   `json:"test_type"`        // SIMULATED_SCENARIO_TEST
+	DataSource            string   `json:"data_source"`      // SIMULATED_TEST_DOUBLE
 }
 
 type ShadowReconciliationReport struct {
@@ -473,10 +473,10 @@ func TestPhase4_1_ForensicReconciliationMatrix(t *testing.T) {
 // match expected canonical outcomes across all sports and boundary conditions without mutating wallets.
 func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 	shadowReport := ShadowReconciliationReport{
-		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
-		OperatingMode:      "SHADOW",
-		EvaluationType:     "SIMULATED_SCENARIO_TEST",
-		WalletMutations:    0, // Strict invariant: zero wallet payouts
+		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
+		OperatingMode:   "SHADOW",
+		EvaluationType:  "SIMULATED_SCENARIO_TEST",
+		WalletMutations: 0, // Strict invariant: zero wallet payouts
 	}
 
 	// Representative shadow test cases covering wins, losses, pushes, voids, and period holds across all sports
@@ -499,7 +499,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Football 1X2 Home Win", sportID: 1, sportName: "Football", marketCode: "FB_1X2", period: "FT",
 			selCode: "1", odds: 2.10, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 2, Away: 1}},
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 2, Away: 1}},
 			expectedStat: market.BetStatusWon, expectedPay: 210.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -507,7 +507,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Football Totals Under 2.5 Win", sportID: 1, sportName: "Football", marketCode: "FB_TOTAL_GOALS", period: "FT",
 			selCode: "UNDER", line: floatPtr(2.5), odds: 1.80, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 1, Away: 1}}, // 2 goals < 2.5
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 1, Away: 1}}, // 2 goals < 2.5
 			expectedStat: market.BetStatusWon, expectedPay: 180.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -515,7 +515,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Football Totals 2.0 Push", sportID: 1, sportName: "Football", marketCode: "FB_TOTAL_GOALS", period: "FT",
 			selCode: "OVER", line: floatPtr(2.0), odds: 1.95, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 1, Away: 1}}, // 2 goals == 2.0 line -> PUSH
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 1, Away: 1}}, // 2 goals == 2.0 line -> PUSH
 			expectedStat: market.BetStatusPush, expectedPay: 100.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -523,7 +523,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Football DNB Draw Push", sportID: 1, sportName: "Football", marketCode: "FB_DNB", period: "FT",
 			selCode: "1", odds: 1.70, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 2, Away: 2}},
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 2, Away: 2}},
 			expectedStat: market.BetStatusPush, expectedPay: 100.0,
 			scope: "RULE_LEVEL_TEST_UNOBSERVED",
 		},
@@ -545,7 +545,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Basketball Moneyline Away Win", sportID: 2, sportName: "Basketball", marketCode: "BB_MONEYLINE", period: "FT",
 			selCode: "2", odds: 2.20, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 102, Away: 108}},
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 102, Away: 108}},
 			expectedStat: market.BetStatusWon, expectedPay: 220.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -553,7 +553,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Tennis Match Winner Sets", sportID: 3, sportName: "Tennis", marketCode: "TN_MATCH_WINNER", period: "FT",
 			selCode: "1", odds: 1.65, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 2, Away: 1}},
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 2, Away: 1}},
 			expectedStat: market.BetStatusWon, expectedPay: 165.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -561,7 +561,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Table Tennis Match Winner Sets", sportID: 13, sportName: "Table Tennis", marketCode: "TT_MATCH_WINNER", period: "FT",
 			selCode: "HOME", odds: 1.55, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 3, Away: 0}},
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 3, Away: 0}},
 			expectedStat: market.BetStatusWon, expectedPay: 155.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -569,7 +569,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Volleyball Total Points Under", sportID: 5, sportName: "Volleyball", marketCode: "VB_TOTAL_POINTS", period: "FT",
 			selCode: "UNDER", line: floatPtr(180.5), odds: 1.85, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 75, Away: 60}}, // 135 total
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 75, Away: 60}}, // 135 total
 			expectedStat: market.BetStatusWon, expectedPay: 185.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -577,7 +577,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Rugby Match 1X2 Draw", sportID: 7, sportName: "Rugby", marketCode: "RB_1X2", period: "FT",
 			selCode: "X", odds: 21.0, stake: 10.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 18, Away: 18}},
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 18, Away: 18}},
 			expectedStat: market.BetStatusWon, expectedPay: 210.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -585,7 +585,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "MMA Fight Winner", sportID: 6, sportName: "MMA", marketCode: "MM_FIGHT_WINNER", period: "FT",
 			selCode: "1", odds: 1.75, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 1, Away: 0}},
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 1, Away: 0}},
 			expectedStat: market.BetStatusWon, expectedPay: 175.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -593,7 +593,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		{
 			name: "Handball 1X2 Home Win", sportID: 10, sportName: "Handball", marketCode: "HB_1X2", period: "FT",
 			selCode: "1", odds: 1.90, stake: 100.0,
-			state: market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 28, Away: 24}},
+			state:        market.CanonicalEventState{IsFinished: true, Score: market.ScoreData{Home: 28, Away: 24}},
 			expectedStat: market.BetStatusWon, expectedPay: 190.0,
 			scope: "CERTIFIED_MARKET_RECONCILIATION",
 		},
@@ -761,11 +761,12 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 			eval := rule.Evaluate(tc.state, bet)
 
 			var actualPay float64
-			if eval.Status == market.BetStatusWon {
+			switch eval.Status {
+			case market.BetStatusWon:
 				actualPay = tc.stake * tc.odds
-			} else if eval.Status == market.BetStatusPush || eval.Status == market.BetStatusVoid {
+			case market.BetStatusPush, market.BetStatusVoid:
 				actualPay = tc.stake * eval.PayoutFactor
-			} else {
+			default:
 				actualPay = 0.0
 			}
 
@@ -1138,12 +1139,12 @@ func TestPhase4_2_CertifiedRuleSemanticsAndResultDataIntegrityAudit(t *testing.T
 	// 7. Persist Phase 4.2 Semantic Audit Matrix
 	semanticsMatrix := Phase42RuleSemanticsMatrix{
 		GeneratedAt:               time.Now().UTC().Format(time.RFC3339),
-		AuditPhase:               "Phase 4.2 Certified Rule Semantics and Result-Data Integrity Audit",
-		OperatingMode:            "SHADOW",
-		TotalAuditedDefinitions:  len(auditedItems),
-		VerifiedCertifiedCount:   len(auditedItems),
+		AuditPhase:                "Phase 4.2 Certified Rule Semantics and Result-Data Integrity Audit",
+		OperatingMode:             "SHADOW",
+		TotalAuditedDefinitions:   len(auditedItems),
+		VerifiedCertifiedCount:    len(auditedItems),
 		RevokedCertificationCount: 0,
-		Definitions:              auditedItems,
+		Definitions:               auditedItems,
 	}
 
 	semBytes, err := json.MarshalIndent(semanticsMatrix, "", "  ")
@@ -1200,12 +1201,12 @@ func GenerateAuthoritativeMarkdownTables() (string, string) {
 	}
 
 	type SportCounts struct {
-		SportID       int
-		SportName     string
-		Total         int
-		Certified     int
-		NotCertified  int
-		Quarantined   int
+		SportID      int
+		SportName    string
+		Total        int
+		Certified    int
+		NotCertified int
+		Quarantined  int
 	}
 
 	bySport := make(map[int]*SportCounts)
@@ -1297,3 +1298,266 @@ func getKeyMarketsForSport(sportID int) string {
 		return "Certified contracts"
 	}
 }
+
+// TestPhase4_3_RealWorldLifecycleAndEdgeCases validates VAR goal disallowals,
+// score revisions, capability gating on uncertified/suspended markets, duplicate message replays,
+// and fixture cancellations.
+func TestPhase4_3_RealWorldLifecycleAndEdgeCases(t *testing.T) {
+	// ------------------------------------------------------------------------
+	// 1. VAR Disallowed Goal & Score Reversal Test
+	// ------------------------------------------------------------------------
+	t.Run("VAR_Disallowed_Goal_Score_Reversal", func(t *testing.T) {
+		rule1X2, _ := market.Get(1, "FB_1X2", market.PeriodFullTime, 1)
+		ruleTotals, _ := market.Get(1, "FB_TOTAL_GOALS", market.PeriodFullTime, 1)
+
+		// Final officially certified state after VAR disallows the 89th minute goal:
+		// Provisional score was 2-1 (Over 2.5, Home Win), but official final result is 1-1.
+		finalCertifiedState := market.CanonicalEventState{
+			IsFinished: true,
+			Score:      market.ScoreData{Home: 1, Away: 1}, // Final certified score
+		}
+
+		// Selection: Home Win ("1")
+		resHome := rule1X2.Evaluate(finalCertifiedState, market.BetSelection{SelectionCode: "1"})
+		if resHome.Status != market.BetStatusLost {
+			t.Errorf("Expected Home Win to be LOST after VAR reversal to 1-1, got %s", resHome.Status)
+		}
+
+		// Selection: Draw ("X")
+		resDraw := rule1X2.Evaluate(finalCertifiedState, market.BetSelection{SelectionCode: "X"})
+		if resDraw.Status != market.BetStatusWon {
+			t.Errorf("Expected Draw to be WON after VAR reversal to 1-1, got %s", resDraw.Status)
+		}
+
+		// Selection: Over 2.5 Goals
+		resOver := ruleTotals.Evaluate(finalCertifiedState, market.BetSelection{SelectionCode: "OVER", Line: floatPtr(2.5)})
+		if resOver.Status != market.BetStatusLost {
+			t.Errorf("Expected Over 2.5 to be LOST after VAR reversal to 1-1, got %s", resOver.Status)
+		}
+
+		// Selection: Under 2.5 Goals
+		resUnder := ruleTotals.Evaluate(finalCertifiedState, market.BetSelection{SelectionCode: "UNDER", Line: floatPtr(2.5)})
+		if resUnder.Status != market.BetStatusWon {
+			t.Errorf("Expected Under 2.5 to be WON after VAR reversal to 1-1, got %s", resUnder.Status)
+		}
+	})
+
+	// ------------------------------------------------------------------------
+	// 2. Bet Placement Server-Side Capability Gating Test
+	// ------------------------------------------------------------------------
+	t.Run("Bet_Placement_Capability_Gating", func(t *testing.T) {
+		// A. Valid Certified Market (Football 1X2) -> ALLOWED
+		allowed, reason := market.CanPlaceMarketCanonical(market.MarketPlacementRequest{
+			SportID:             1,
+			CanonicalMarketCode: "FB_1X2",
+			Period:              "FT",
+			RuleVersion:         1,
+		})
+		if !allowed {
+			t.Errorf("Expected certified FB_1X2 to be allowed, rejected with: %s", reason)
+		}
+
+		// B. Unmapped / Unregistered Market Code -> REJECTED
+		allowed, reason = market.CanPlaceMarketCanonical(market.MarketPlacementRequest{
+			SportID:             1,
+			CanonicalMarketCode: "FB_NON_EXISTENT_MARKET",
+			Period:              "FT",
+			RuleVersion:         1,
+		})
+		if allowed {
+			t.Errorf("Expected non-existent market to be rejected")
+		} else {
+			t.Logf("Confirmed: Unregistered market rejected with: %s", reason)
+		}
+
+		// C. Missing Line on Totals Market -> REJECTED
+		allowed, reason = market.CanPlaceMarketCanonical(market.MarketPlacementRequest{
+			SportID:             1,
+			CanonicalMarketCode: "FB_TOTAL_GOALS",
+			Period:              "FT",
+			Line:                nil, // Missing line!
+			RuleVersion:         1,
+		})
+		if allowed {
+			t.Errorf("Expected missing line on FB_TOTAL_GOALS to be rejected")
+		} else {
+			t.Logf("Confirmed: Missing line rejected with: %s", reason)
+		}
+
+		// D. Unsupported Period for Sport (Basketball SET1) -> REJECTED
+		allowed, reason = market.CanPlaceMarketCanonical(market.MarketPlacementRequest{
+			SportID:             2, // Basketball
+			CanonicalMarketCode: "BB_TOTAL_POINTS",
+			Period:              "SET1", // Invalid period for basketball
+			Line:                floatPtr(200.5),
+			RuleVersion:         1,
+		})
+		if allowed {
+			t.Errorf("Expected invalid period SET1 for Basketball to be rejected")
+		} else {
+			t.Logf("Confirmed: Invalid period rejected with: %s", reason)
+		}
+	})
+
+	// ------------------------------------------------------------------------
+	// 3. Duplicate Event & Concurrent Replay Idempotency Test
+	// ------------------------------------------------------------------------
+	t.Run("Duplicate_Event_Concurrent_Replay", func(t *testing.T) {
+		rule, _ := market.Get(1, "FB_TOTAL_GOALS", market.PeriodFullTime, 1)
+		state := market.CanonicalEventState{
+			IsFinished: true,
+			Score:      market.ScoreData{Home: 2, Away: 1}, // Total = 3
+		}
+		bet := market.BetSelection{
+			SelectionCode: "OVER",
+			Line:          floatPtr(2.5),
+		}
+
+		initial := rule.Evaluate(state, bet)
+
+		// Simulate 100 concurrent evaluator calls (e.g. duplicate webhook delivery)
+		type resultHolder struct {
+			status string
+			payout float64
+		}
+		results := make(chan resultHolder, 100)
+
+		for i := 0; i < 100; i++ {
+			go func() {
+				res := rule.Evaluate(state, bet)
+				results <- resultHolder{status: res.Status, payout: res.PayoutFactor}
+			}()
+		}
+
+		for i := 0; i < 100; i++ {
+			r := <-results
+			if r.status != initial.Status || r.payout != initial.PayoutFactor {
+				t.Fatalf("Replay idempotency violated: got status=%s, payout=%.2f (want %s, %.2f)",
+					r.status, r.payout, initial.Status, initial.PayoutFactor)
+			}
+		}
+	})
+
+	// ------------------------------------------------------------------------
+	// 4. Cancelled / Abandoned / Postponed Lifecycle Settlement Semantics
+	// ------------------------------------------------------------------------
+	t.Run("Fixture_Abandoned_Or_Cancelled_Lifecycle_Semantics", func(t *testing.T) {
+		// (a) Officially CANCELLED fixture -> MUST be VOID with 1.0 payout factor (refund), NEVER LOST
+		cancelledState := market.CanonicalEventState{
+			CanonicalFixtureID: "CF-CANC-01",
+			SportID:            1,
+			IsFinished:         true,
+			Status:             market.FixtureStatusCancelled,
+			Score:              market.ScoreData{Home: 0, Away: 0},
+		}
+		bet1X2 := market.BetSelection{
+			BetID:               "bet-canc-1",
+			SportID:             1,
+			CanonicalMarketCode: "FB_1X2",
+			Period:              market.PeriodFullTime,
+			SelectionCode:       "1",
+		}
+		resCanc, err := market.Evaluate(cancelledState, bet1X2)
+		if err != nil {
+			t.Fatalf("unexpected error evaluating cancelled fixture: %v", err)
+		}
+		if resCanc.Status != market.BetStatusVoid || resCanc.PayoutFactor != 1.0 {
+			t.Fatalf("CRITICAL: Cancelled fixture evaluated to %s (factor=%.2f), expected VOID (1.0)",
+				resCanc.Status, resCanc.PayoutFactor)
+		}
+
+		// (b) POSTPONED fixture -> MUST be SETTLEMENT_HOLD fail-closed pending reschedule determination
+		postponedState := market.CanonicalEventState{
+			CanonicalFixtureID: "CF-POST-01",
+			SportID:            1,
+			IsFinished:         false,
+			Status:             market.FixtureStatusPostponed,
+			Score:              market.ScoreData{Home: 0, Away: 0},
+		}
+		resPost, err := market.Evaluate(postponedState, bet1X2)
+		if err != nil {
+			t.Fatalf("unexpected error evaluating postponed fixture: %v", err)
+		}
+		if resPost.Status != market.BetStatusSettlementHold || resPost.Settled {
+			t.Fatalf("CRITICAL: Postponed fixture evaluated to %s (settled=%v), expected SETTLEMENT_HOLD (false)",
+				resPost.Status, resPost.Settled)
+		}
+
+		// (c) ABANDONED fixture with UNDETERMINED market (e.g. 1X2 when abandoned at 60' 1-1)
+		// MUST be held fail-closed pending official determination, NEVER LOST
+		abandonedStateUndet := market.CanonicalEventState{
+			CanonicalFixtureID: "CF-ABAN-01",
+			SportID:            1,
+			IsFinished:         false,
+			Status:             market.FixtureStatusAbandoned,
+			Score:              market.ScoreData{Home: 1, Away: 1},
+		}
+		resAbanUndet, err := market.Evaluate(abandonedStateUndet, bet1X2)
+		if err != nil {
+			t.Fatalf("unexpected error evaluating abandoned undetermined fixture: %v", err)
+		}
+		if resAbanUndet.Status != market.BetStatusSettlementHold || resAbanUndet.Settled {
+			t.Fatalf("CRITICAL: Abandoned undetermined market evaluated to %s, expected SETTLEMENT_HOLD", resAbanUndet.Status)
+		}
+
+		// (d) ABANDONED fixture where market was UNCONDITIONALLY DETERMINED:
+		// Example: Over 2.5 Total Goals when score reached 2-1 (3 goals total) before abandonment at 70'
+		lineVal := 2.5
+		betOver25 := market.BetSelection{
+			BetID:               "bet-over-25",
+			SportID:             1,
+			CanonicalMarketCode: "FB_TOTAL_GOALS",
+			Period:              market.PeriodFullTime,
+			SelectionCode:       "OVER",
+			Line:                &lineVal,
+		}
+		abandonedStateDet := market.CanonicalEventState{
+			CanonicalFixtureID: "CF-ABAN-02",
+			SportID:            1,
+			IsFinished:         false,
+			Status:             market.FixtureStatusAbandoned,
+			Score:              market.ScoreData{Home: 2, Away: 1}, // 3 goals total > 2.5!
+		}
+		resAbanDet, err := market.Evaluate(abandonedStateDet, betOver25)
+		if err != nil {
+			t.Fatalf("unexpected error evaluating abandoned determined fixture: %v", err)
+		}
+		if resAbanDet.Status != market.BetStatusWon || resAbanDet.PayoutFactor != 1.0 {
+			t.Fatalf("CRITICAL: Unconditionally determined Over 2.5 evaluated to %s (factor=%.2f), expected WON (1.0)",
+				resAbanDet.Status, resAbanDet.PayoutFactor)
+		}
+
+		// (e) ABANDONED fixture where completed period market (1st Half Over 0.5) is evaluated
+		// Match abandoned at 70', but 1st Half ended 1-0
+		line05 := 0.5
+		betHTOver05 := market.BetSelection{
+			BetID:               "bet-ht-over-05",
+			SportID:             1,
+			CanonicalMarketCode: "FB_TOTAL_GOALS",
+			Period:              market.PeriodHalfTime,
+			SelectionCode:       "OVER",
+			Line:                &line05,
+		}
+		abandonedStateHT := market.CanonicalEventState{
+			CanonicalFixtureID: "CF-ABAN-03",
+			SportID:            1,
+			IsFinished:         false,
+			Status:             market.FixtureStatusAbandoned,
+			Score:              market.ScoreData{Home: 1, Away: 0},
+			PeriodScores: map[string]market.ScoreData{
+				"HT": {Home: 1, Away: 0},
+			},
+			IsPeriodFinished: map[string]bool{
+				market.PeriodHalfTime: true,
+			},
+		}
+		resAbanHT, err := market.Evaluate(abandonedStateHT, betHTOver05)
+		if err != nil {
+			t.Fatalf("unexpected error evaluating completed HT period on abandoned fixture: %v", err)
+		}
+		if resAbanHT.Status != market.BetStatusWon || resAbanHT.PayoutFactor != 1.0 {
+			t.Fatalf("CRITICAL: Completed HT period evaluated to %s, expected WON", resAbanHT.Status)
+		}
+	})
+}
+

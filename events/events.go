@@ -6,9 +6,13 @@ import (
 
 // Commercial Feed Providers (Odds, Lines, Markets)
 const (
-	CommercialFeedSportybet = "SPORTYBET"
-	CommercialFeedOdibets   = "ODIBETS"
-	CommercialFeedParipesa  = "PARIPESA" // Deprecated legacy alias: quarantined from active ingestion
+	CommercialFeedSportsXBet = "SPORTSXBET"
+	CommercialFeedOddixBets  = "ODDIXBETS"
+
+	// Legacy aliases (Deprecated: Retained for backward-compatible normalization)
+	CommercialFeedSportybet = "SPORTSXBET" // Deprecated: use CommercialFeedSportsXBet
+	CommercialFeedOdibets   = "ODDIXBETS"  // Deprecated: use CommercialFeedOddixBets
+	CommercialFeedParipesa  = "PARIPESA"   // Deprecated legacy alias: quarantined from active ingestion
 )
 
 // Independent Truth / Verification Sources (Evidence, Quorum, Certification)

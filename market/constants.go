@@ -103,8 +103,12 @@ const (
 
 // Active Provider Identifiers
 const (
-	ProviderSportyBet = "SPORTYBET"
-	ProviderOdibets   = "ODIBETS"
+	ProviderSportsXBet = "SPORTSXBET"
+	ProviderOddixBets  = "ODDIXBETS"
+
+	// Legacy aliases for backward compatibility and ingestion normalization
+	ProviderSportyBet = "SPORTSXBET" // Deprecated: use ProviderSportsXBet
+	ProviderOdibets   = "ODDIXBETS"  // Deprecated: use ProviderOddixBets
 )
 
 // Scope / Period Identifiers

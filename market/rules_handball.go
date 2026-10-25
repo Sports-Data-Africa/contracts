@@ -129,9 +129,10 @@ func (r *HandballTotalsRule) Key() MarketRuleKey {
 		p = PeriodFullTime
 	}
 	code := "HB_TOTAL_GOALS"
-	if r.Team == "HOME" {
+	switch r.Team {
+	case "HOME":
 		code = "HB_HOME_TOTALS"
-	} else if r.Team == "AWAY" {
+	case "AWAY":
 		code = "HB_AWAY_TOTALS"
 	}
 	return MarketRuleKey{SportID: 10, MarketCode: code, Period: p, RuleVersion: 1}
@@ -165,20 +166,22 @@ func (r *HandballTotalsRule) Evaluate(state CanonicalEventState, bet BetSelectio
 				RequiredDomain: DomainPeriodScore,
 			}
 		}
-		if r.Team == "HOME" {
+		switch r.Team {
+		case "HOME":
 			current = ht.Home
-		} else if r.Team == "AWAY" {
+		case "AWAY":
 			current = ht.Away
-		} else {
+		default:
 			current = ht.Home + ht.Away
 		}
 		isPeriodDone = state.IsPeriodFinished[PeriodHalfTime] || state.Status == FixtureStatusHT || state.IsFinished
 	} else {
-		if r.Team == "HOME" {
+		switch r.Team {
+		case "HOME":
 			current = state.Score.Home
-		} else if r.Team == "AWAY" {
+		case "AWAY":
 			current = state.Score.Away
-		} else {
+		default:
 			current = state.Score.Home + state.Score.Away
 		}
 		isPeriodDone = state.IsFinished

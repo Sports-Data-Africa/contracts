@@ -45,11 +45,12 @@ func (r *Registry) Get(sportID int, marketCode, period string, ruleVersion int) 
 
 	normCode := strings.ToUpper(strings.TrimSpace(marketCode))
 	normPeriod := strings.ToUpper(strings.TrimSpace(period))
-	if normPeriod == "" {
+	switch normPeriod {
+	case "":
 		normPeriod = PeriodFullTime
-	} else if normPeriod == "1H" || normPeriod == "FIRST_HALF" {
+	case "1H", "FIRST_HALF":
 		normPeriod = PeriodHalfTime
-	} else if normPeriod == "2H" || normPeriod == "SECOND_HALF" {
+	case "2H", "SECOND_HALF":
 		normPeriod = PeriodSecondHalf
 	}
 	if ruleVersion <= 0 {
@@ -94,8 +95,73 @@ func (r *Registry) ListAll() []MarketRuleKey {
 }
 
 // Evaluate evaluates a bet selection using the centrally registered rule.
+// Evaluate evaluates a bet selection using the centrally registered rule.
 // Returns an error if no rule is registered for the bet's key (Fail-Closed).
 func Evaluate(state CanonicalEventState, bet BetSelection) (SettlementResult, error) {
+	// 1. Fixture Lifecycle Gating
+	switch state.Status {
+	case FixtureStatusCancelled:
+		// Cancelled fixtures must be VOIDED with full stake refund per house rules, NEVER marked LOST
+		return SettlementResult{
+			Status:         BetStatusVoid,
+			PayoutFactor:   1.0,
+			Settled:        true,
+			Timing:         TimingEventEnd,
+			Reason:         "FIXTURE_CANCELLED: Match officially cancelled; stake fully refunded per sportsbook house rules",
+			RequiredDomain: DomainScore,
+		}, nil
+
+	case FixtureStatusPostponed:
+		// Postponed matches held pending official rescheduling confirmation within policy window
+		return SettlementResult{
+			Status:         BetStatusSettlementHold,
+			PayoutFactor:   0.0,
+			Settled:        false,
+			Timing:         TimingEventEnd,
+			Reason:         "FIXTURE_POSTPONED: Settlement held pending official federation rescheduling determination",
+			RequiredDomain: DomainScore,
+		}, nil
+
+	case FixtureStatusAbandoned, FixtureStatusInterrupted:
+		// Check for unconditionally determined markets:
+		// (a) Completed period markets (e.g. HT completed before abandonment at 70')
+		normPeriod := NormalizePeriod(bet.Period)
+		htScore, hasHT := state.PeriodScores["HT"]
+		if normPeriod == PeriodHalfTime && (state.IsPeriodFinished[PeriodHalfTime] || (hasHT && htScore.Home >= 0 && htScore.Away >= 0)) {
+			// Period is unconditionally completed! Proceed to regular rule evaluation
+			break
+		}
+		// (b) Over Totals already achieved before abandonment
+		if strings.Contains(strings.ToUpper(bet.CanonicalMarketCode), "TOTAL") && strings.EqualFold(strings.TrimSpace(bet.SelectionCode), "OVER") {
+			totalScore := state.Score.Home + state.Score.Away
+			lineVal := 0.0
+			if bet.Line != nil {
+				lineVal = *bet.Line
+			}
+			if float64(totalScore) > lineVal {
+				// Unconditionally determined as WON
+				return SettlementResult{
+					Status:         BetStatusWon,
+					PayoutFactor:   1.0,
+					Settled:        true,
+					Timing:         TimingInstantIrreversible,
+					Reason:         fmt.Sprintf("UNCONDITIONALLY_DETERMINED: Total %d exceeded line %.2f before abandonment", totalScore, lineVal),
+					RequiredDomain: DomainScore,
+				}, nil
+			}
+		}
+		// (c) Undetermined markets on abandoned matches MUST NOT be marked LOST:
+		// Held fail-closed pending official abandonment protocol
+		return SettlementResult{
+			Status:         BetStatusSettlementHold,
+			PayoutFactor:   0.0,
+			Settled:        false,
+			Timing:         TimingEventEnd,
+			Reason:         "FIXTURE_ABANDONED: Undetermined market held fail-closed pending official federation ruling",
+			RequiredDomain: DomainScore,
+		}, nil
+	}
+
 	period := bet.Period
 	if period == "" {
 		return SettlementResult{

@@ -37,6 +37,12 @@ func (e *Engine) GetRepository() Repository {
 // ResolveCanonicalID is the hot-path identity lookup.
 // 1. L1 local process memory lookup (zero I/O, sub-millisecond).
 // 2. L2 Redis lookup (backfills L1 on hit).
+// ResolveCanonicalID resolves an external provider's fixture ID to the SDA canonical fixture ID.
+// Normalizes provider names to canonical codes (e.g. "sportybet" -> "SPORTSXBET") while retaining
+// backward-compatible fallback checks for existing database records.
+// Hot lookup order:
+// 1. L1 process-local sync.Map (~61-146 ns)
+// 2. L2 Redis distributed hash cache (~1-2 ms)
 // 3. MySQL repository lookup (backfills L2 and L1 on hit).
 // Returns ErrAliasNotFound if the provider fixture ID is not mapped.
 func (e *Engine) ResolveCanonicalID(ctx context.Context, provider, providerFixtureID string) (string, error) {
@@ -44,29 +50,52 @@ func (e *Engine) ResolveCanonicalID(ctx context.Context, provider, providerFixtu
 		return "", errors.New("provider and provider_fixture_id are required")
 	}
 
-	// 1. Check L1 local cache (hot path)
-	if e.cache != nil {
-		if cid, ok := e.cache.ResolveLocal(provider, providerFixtureID); ok && cid != "" {
-			return cid, nil
-		}
+	normProvider := canonical.NormalizeProvider(provider)
 
-		// 2. Check L2 Redis cache
-		if cid, ok := e.cache.ResolveTiered(ctx, provider, providerFixtureID); ok && cid != "" {
-			return cid, nil
+	// Helper to lookup by a specific provider string across tiers
+	lookup := func(p string) (string, error) {
+		if e.cache != nil {
+			if cid, ok := e.cache.ResolveLocal(p, providerFixtureID); ok && cid != "" {
+				return cid, nil
+			}
+			if cid, ok := e.cache.ResolveTiered(ctx, p, providerFixtureID); ok && cid != "" {
+				if provider != p {
+					e.cache.PutAlias(ctx, provider, providerFixtureID, cid)
+				}
+				return cid, nil
+			}
 		}
+		if e.repo != nil {
+			alias, err := e.repo.GetAlias(ctx, p, providerFixtureID)
+			if err == nil && alias != nil {
+				if e.cache != nil {
+					e.cache.PutAlias(ctx, normProvider, providerFixtureID, alias.CanonicalFixtureID)
+					if provider != normProvider {
+						e.cache.PutAlias(ctx, provider, providerFixtureID, alias.CanonicalFixtureID)
+					}
+				}
+				return alias.CanonicalFixtureID, nil
+			}
+			if !errors.Is(err, ErrAliasNotFound) {
+				return "", fmt.Errorf("alias lookup error: %w", err)
+			}
+		}
+		return "", ErrAliasNotFound
 	}
 
-	// 3. Check MySQL repository
-	if e.repo != nil {
-		alias, err := e.repo.GetAlias(ctx, provider, providerFixtureID)
-		if err == nil && alias != nil {
+	// 1. Primary lookup under canonical provider code (e.g. SPORTSXBET)
+	if cid, err := lookup(normProvider); err == nil && cid != "" {
+		return cid, nil
+	}
+
+	// 2. Backward compatibility fallback: Check raw provider string if different (e.g. "sportybet")
+	rawProvider := strings.TrimSpace(provider)
+	if rawProvider != normProvider {
+		if cid, err := lookup(rawProvider); err == nil && cid != "" {
 			if e.cache != nil {
-				e.cache.PutAlias(ctx, provider, providerFixtureID, alias.CanonicalFixtureID)
+				e.cache.PutAlias(ctx, normProvider, providerFixtureID, cid)
 			}
-			return alias.CanonicalFixtureID, nil
-		}
-		if !errors.Is(err, ErrAliasNotFound) {
-			return "", fmt.Errorf("alias lookup error: %w", err)
+			return cid, nil
 		}
 	}
 
@@ -94,8 +123,10 @@ func (e *Engine) ResolveOrCreateFixture(
 		return nil, errors.New("provider and providerFixtureID are required")
 	}
 
-	// Step 1: Check if alias already exists
-	cid, err := e.ResolveCanonicalID(ctx, provider, providerFixtureID)
+	normProvider := canonical.NormalizeProvider(provider)
+
+	// Step 1: Check if alias already exists (checks canonical code + legacy aliases)
+	cid, err := e.ResolveCanonicalID(ctx, normProvider, providerFixtureID)
 	if err == nil && cid != "" {
 		// Existing mapping found; fetch full canonical fixture
 		return e.GetCanonicalFixture(ctx, cid)
@@ -107,15 +138,23 @@ func (e *Engine) ResolveOrCreateFixture(
 		return nil, fmt.Errorf("get or create canonical fixture: %w", err)
 	}
 
-	// Step 3: Attach provider alias to the canonical fixture
-	_, err = e.repo.AttachAlias(ctx, f.CanonicalFixtureID, provider, providerFixtureID, mappingType, source)
+	// Step 3: Attach provider alias to the canonical fixture under canonical provider code
+	_, err = e.repo.AttachAlias(ctx, f.CanonicalFixtureID, normProvider, providerFixtureID, mappingType, source)
 	if err != nil {
 		return nil, fmt.Errorf("attach provider alias: %w", err)
 	}
 
+	// Also attach raw provider alias if different for backward-compatibility lookup in legacy DB
+	if normProvider != provider {
+		_, _ = e.repo.AttachAlias(ctx, f.CanonicalFixtureID, provider, providerFixtureID, mappingType, source)
+	}
+
 	// Step 4: Populate L1 and L2 caches
 	if e.cache != nil {
-		e.cache.PutAlias(ctx, provider, providerFixtureID, f.CanonicalFixtureID)
+		e.cache.PutAlias(ctx, normProvider, providerFixtureID, f.CanonicalFixtureID)
+		if normProvider != provider {
+			e.cache.PutAlias(ctx, provider, providerFixtureID, f.CanonicalFixtureID)
+		}
 		e.cache.PutFixture(ctx, f)
 	}
 

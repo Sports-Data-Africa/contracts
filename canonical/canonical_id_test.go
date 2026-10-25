@@ -312,3 +312,96 @@ func TestValidateFixtureLinkage(t *testing.T) {
 	}
 }
 
+func TestNaturalIdentity_DisambiguationAndCollisionResistance(t *testing.T) {
+	baseTime := time.Date(2026, 10, 24, 15, 0, 0, 0, time.UTC)
+
+	// 1. Similar Teams in Same City (Manchester United vs Manchester City)
+	hashManU := NaturalCandidate{SportID: 1, HomeTeam: "Manchester United", AwayTeam: "Liverpool", ScheduledStart: baseTime}.NaturalKey()
+	hashManCity := NaturalCandidate{SportID: 1, HomeTeam: "Manchester City", AwayTeam: "Liverpool", ScheduledStart: baseTime}.NaturalKey()
+	if hashManU == hashManCity {
+		t.Fatalf("COLLISION DETECTED: Manchester United collided with Manchester City! Hash: %s", hashManU)
+	}
+
+	// 2. Distinct Global Clubs Sharing Token (Arsenal vs Arsenal Sarandi)
+	hashArsenal := NaturalCandidate{SportID: 1, HomeTeam: "Arsenal", AwayTeam: "Chelsea", ScheduledStart: baseTime}.NaturalKey()
+	hashArsenalSarandi := NaturalCandidate{SportID: 1, HomeTeam: "Arsenal Sarandi", AwayTeam: "Chelsea", ScheduledStart: baseTime}.NaturalKey()
+	if hashArsenal == hashArsenalSarandi {
+		t.Fatalf("COLLISION DETECTED: Arsenal collided with Arsenal Sarandi! Hash: %s", hashArsenal)
+	}
+
+	// 3. Senior vs Reserve Side (Barcelona vs Barcelona B / Barcelona II)
+	hashBarcaSenior := NaturalCandidate{SportID: 1, HomeTeam: "Barcelona", AwayTeam: "Girona", ScheduledStart: baseTime}.NaturalKey()
+	hashBarcaB := NaturalCandidate{SportID: 1, HomeTeam: "Barcelona B", AwayTeam: "Girona", ScheduledStart: baseTime}.NaturalKey()
+	hashBarcaII := NaturalCandidate{SportID: 1, HomeTeam: "Barcelona II", AwayTeam: "Girona", ScheduledStart: baseTime}.NaturalKey()
+	if hashBarcaSenior == hashBarcaB {
+		t.Fatalf("COLLISION DETECTED: Barcelona Senior collided with Barcelona B! Hash: %s", hashBarcaSenior)
+	}
+	if hashBarcaB != hashBarcaII {
+		t.Errorf("Barcelona B and Barcelona II should collapse to the same RESERVE key, got %s != %s", hashBarcaB, hashBarcaII)
+	}
+
+	// 4. Senior vs Youth / Age Category (Chelsea vs Chelsea U21)
+	hashChelseaSenior := NaturalCandidate{SportID: 1, HomeTeam: "Chelsea", AwayTeam: "Fulham", ScheduledStart: baseTime}.NaturalKey()
+	hashChelseaU21 := NaturalCandidate{SportID: 1, HomeTeam: "Chelsea U21", AwayTeam: "Fulham", ScheduledStart: baseTime}.NaturalKey()
+	if hashChelseaSenior == hashChelseaU21 {
+		t.Fatalf("COLLISION DETECTED: Chelsea Senior collided with Chelsea U21! Hash: %s", hashChelseaSenior)
+	}
+
+	// 5. Men vs Women (Arsenal vs Arsenal Women)
+	hashArsenalMen := NaturalCandidate{SportID: 1, HomeTeam: "Arsenal", AwayTeam: "Chelsea", ScheduledStart: baseTime, Gender: "MEN"}.NaturalKey()
+	hashArsenalWomen := NaturalCandidate{SportID: 1, HomeTeam: "Arsenal Women", AwayTeam: "Chelsea Women", ScheduledStart: baseTime}.NaturalKey()
+	if hashArsenalMen == hashArsenalWomen {
+		t.Fatalf("COLLISION DETECTED: Arsenal Men collided with Arsenal Women! Hash: %s", hashArsenalMen)
+	}
+
+	// 6. Rescheduled Match (15:00 UTC moved to 19:00 UTC)
+	rescheduledTime := baseTime.Add(4 * time.Hour)
+	hashOriginal := NaturalCandidate{SportID: 1, HomeTeam: "Real Madrid", AwayTeam: "Barcelona", ScheduledStart: baseTime}.NaturalKey()
+	hashRescheduled := NaturalCandidate{SportID: 1, HomeTeam: "Real Madrid", AwayTeam: "Barcelona", ScheduledStart: rescheduledTime}.NaturalKey()
+	if hashOriginal == hashRescheduled {
+		t.Fatalf("COLLISION DETECTED: Rescheduled match collided with original match! Hash: %s", hashOriginal)
+	}
+
+	// 7. Kickoff Boundary Jitter across 30-min window (19:29 vs 19:31)
+	tJitter1 := time.Date(2026, 10, 24, 19, 29, 0, 0, time.UTC)
+	tJitter2 := time.Date(2026, 10, 24, 19, 31, 0, 0, time.UTC)
+	cand1 := NaturalCandidate{SportID: 1, HomeTeam: "Juventus", AwayTeam: "Milan", ScheduledStart: tJitter1}
+	cand2 := NaturalCandidate{SportID: 1, HomeTeam: "Juventus", AwayTeam: "Milan", ScheduledStart: tJitter2}
+	
+	// Direct single-bucket hash will differ across boundary
+	h1 := cand1.NaturalKey()
+	h2 := cand2.NaturalKey()
+	if h1 == h2 {
+		t.Errorf("Expected different primary bucket hashes across boundary: %s == %s", h1, h2)
+	}
+
+	// But Candidate list (neighbouring buckets) MUST intersect, allowing cross-feed matching
+	candidates1 := cand1.NaturalKeyCandidates()
+	candidates2 := cand2.NaturalKeyCandidates()
+	matched := false
+	for _, c1 := range candidates1 {
+		for _, c2 := range candidates2 {
+			if c1 == c2 {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			break
+		}
+	}
+	if !matched {
+		t.Fatalf("FAIL: NaturalKeyCandidates failed to bridge 2-minute boundary jitter (19:29 vs 19:31)!")
+	}
+
+	// 8. Simultaneous Fixtures in Same Sport
+	hashMatchA := NaturalCandidate{SportID: 1, HomeTeam: "Liverpool", AwayTeam: "Everton", ScheduledStart: baseTime}.NaturalKey()
+	hashMatchB := NaturalCandidate{SportID: 1, HomeTeam: "Newcastle", AwayTeam: "Sunderland", ScheduledStart: baseTime}.NaturalKey()
+	if hashMatchA == hashMatchB {
+		t.Fatalf("COLLISION DETECTED: Simultaneous matches collided! Hash: %s", hashMatchA)
+	}
+
+	t.Logf("All natural identity disambiguation and collision-resistance checks PASSED.")
+}
+
+

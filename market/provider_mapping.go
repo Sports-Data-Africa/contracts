@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/Sports-Data-Africa/contracts/canonical"
 )
 
 // ProviderMarketInput represents incoming market data from a provider (SportyBet or Odibets).
@@ -94,10 +96,10 @@ func ExtractDeterministicLine(specifier, outcomeName, marketDesc string) *float6
 	return nil
 }
 
-// MapProviderMarket normalizes incoming SportyBet or Odibets market offerings into canonical definitions.
+// MapProviderMarket normalizes incoming SportsXBet or OddixBets market offerings into canonical definitions.
 // Zero Unsupported Markets Invariant: If unmapped or no settlement rule exists -> DISABLED_UNSUPPORTED.
 func MapProviderMarket(input ProviderMarketInput) CanonicalMarketMappingResult {
-	provider := strings.ToUpper(strings.TrimSpace(input.Provider))
+	provider := canonical.NormalizeProvider(input.Provider)
 	sportID := input.SportID
 
 	var canonicalCode string
@@ -120,9 +122,9 @@ func MapProviderMarket(input ProviderMarketInput) CanonicalMarketMappingResult {
 	rawSel := strings.TrimSpace(input.RawOutcomeName)
 
 	switch provider {
-	case ProviderSportyBet:
+	case ProviderSportsXBet, "SPORTYBET":
 		canonicalCode, period, normSel = mapSportyBet(sportID, rawID, normDesc, rawSel)
-	case ProviderOdibets:
+	case ProviderOddixBets, "ODIBETS":
 		canonicalCode, period, normSel = mapOdibets(sportID, rawID, normDesc, rawSel)
 	default:
 		return CanonicalMarketMappingResult{

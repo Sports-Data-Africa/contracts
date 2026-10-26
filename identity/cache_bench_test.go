@@ -18,10 +18,9 @@ func BenchmarkL1Cache_GetCanonicalID(b *testing.B) {
 	targetProvider := "SPORTYBET"
 	targetID := "sr:match:00000500"
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		cid, ok := cache.GetCanonicalID(targetProvider, targetID)
 		if !ok || cid == "" {
 			b.Fatalf("expected cache hit for %s:%s", targetProvider, targetID)
@@ -66,10 +65,9 @@ func BenchmarkEngine_ResolveCanonicalID_L1Hit(b *testing.B) {
 	targetProvider := "SPORTYBET"
 	targetID := "sr:match:00000500"
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		cid, err := engine.ResolveCanonicalID(ctx, targetProvider, targetID)
 		if err != nil || cid == "" {
 			b.Fatalf("expected resolve hit")

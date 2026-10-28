@@ -51,26 +51,33 @@ func (e *Engine) ResolveCanonicalID(ctx context.Context, provider, providerFixtu
 	}
 
 	normProvider := canonical.NormalizeProvider(provider)
+	cleanID := strings.TrimPrefix(strings.TrimPrefix(providerFixtureID, "sr:match:"), "sr:sport_event:")
+	candidatePIDs := []string{providerFixtureID}
+	if cleanID != providerFixtureID && cleanID != "" {
+		candidatePIDs = append(candidatePIDs, cleanID)
+	}
 
 	// Helper to lookup by a specific provider string across tiers
-	lookup := func(p string) (string, error) {
+	lookup := func(p, targetPID string) (string, error) {
 		if e.cache != nil {
-			if cid, ok := e.cache.ResolveLocal(p, providerFixtureID); ok && cid != "" {
+			if cid, ok := e.cache.ResolveLocal(p, targetPID); ok && cid != "" {
 				return cid, nil
 			}
-			if cid, ok := e.cache.ResolveTiered(ctx, p, providerFixtureID); ok && cid != "" {
-				if provider != p {
+			if cid, ok := e.cache.ResolveTiered(ctx, p, targetPID); ok && cid != "" {
+				if provider != p || providerFixtureID != targetPID {
 					e.cache.PutAlias(ctx, provider, providerFixtureID, cid)
 				}
 				return cid, nil
 			}
 		}
 		if e.repo != nil {
-			alias, err := e.repo.GetAlias(ctx, p, providerFixtureID)
+			alias, err := e.repo.GetAlias(ctx, p, targetPID)
 			if err == nil && alias != nil {
 				if e.cache != nil {
+					e.cache.PutAlias(ctx, normProvider, targetPID, alias.CanonicalFixtureID)
 					e.cache.PutAlias(ctx, normProvider, providerFixtureID, alias.CanonicalFixtureID)
 					if provider != normProvider {
+						e.cache.PutAlias(ctx, provider, targetPID, alias.CanonicalFixtureID)
 						e.cache.PutAlias(ctx, provider, providerFixtureID, alias.CanonicalFixtureID)
 					}
 				}
@@ -83,19 +90,21 @@ func (e *Engine) ResolveCanonicalID(ctx context.Context, provider, providerFixtu
 		return "", ErrAliasNotFound
 	}
 
-	// 1. Primary lookup under canonical provider code (e.g. SPORTSXBET)
-	if cid, err := lookup(normProvider); err == nil && cid != "" {
-		return cid, nil
-	}
-
-	// 2. Backward compatibility fallback: Check raw provider string if different (e.g. "sportybet")
-	rawProvider := strings.TrimSpace(provider)
-	if rawProvider != normProvider {
-		if cid, err := lookup(rawProvider); err == nil && cid != "" {
-			if e.cache != nil {
-				e.cache.PutAlias(ctx, normProvider, providerFixtureID, cid)
-			}
+	for _, pid := range candidatePIDs {
+		// 1. Primary lookup under canonical provider code (e.g. SPORTSXBET)
+		if cid, err := lookup(normProvider, pid); err == nil && cid != "" {
 			return cid, nil
+		}
+
+		// 2. Backward compatibility fallback: Check raw provider string if different (e.g. "sportybet")
+		rawProvider := strings.TrimSpace(provider)
+		if rawProvider != normProvider {
+			if cid, err := lookup(rawProvider, pid); err == nil && cid != "" {
+				if e.cache != nil {
+					e.cache.PutAlias(ctx, normProvider, providerFixtureID, cid)
+				}
+				return cid, nil
+			}
 		}
 	}
 

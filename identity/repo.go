@@ -885,18 +885,21 @@ func (r *SQLRepository) GetAlias(ctx context.Context, provider, providerFixtureI
 	}
 	provider = strings.ToUpper(strings.TrimSpace(provider))
 	providerFixtureID = strings.TrimSpace(providerFixtureID)
+	cleanID := strings.TrimPrefix(strings.TrimPrefix(providerFixtureID, "sr:match:"), "sr:sport_event:")
+	srID := "sr:match:" + cleanID
 
 	query := `
 		SELECT id, canonical_fixture_id, provider, provider_fixture_id, mapping_type, source,
 		       is_active, result_resolution_path,
 		       first_seen_at, last_seen_at, COALESCE(metadata, '{}'), created_at, updated_at
 		FROM fixture_aliases
-		WHERE UPPER(provider) = ? AND provider_fixture_id = ?
+		WHERE UPPER(provider) = ? AND (provider_fixture_id = ? OR provider_fixture_id = ? OR provider_fixture_id = ?)
+		ORDER BY (provider_fixture_id = ?) DESC
 		LIMIT 1
 	`
 	var a FixtureAlias
 	var mapType, meta string
-	err := r.db.QueryRowContext(ctx, query, provider, providerFixtureID).Scan(
+	err := r.db.QueryRowContext(ctx, query, provider, providerFixtureID, cleanID, srID, providerFixtureID).Scan(
 		&a.ID, &a.CanonicalFixtureID, &a.Provider, &a.ProviderFixtureID, &mapType, &a.Source,
 		&a.IsActive, &a.ResultResolutionPath,
 		&a.FirstSeenAt, &a.LastSeenAt, &meta, &a.CreatedAt, &a.UpdatedAt,
@@ -915,9 +918,10 @@ func (r *SQLRepository) GetAlias(ctx context.Context, provider, providerFixtureI
 	var pfmSportID int
 	pfmErr := r.db.QueryRowContext(ctx, `
 		SELECT fixture_id, sport_id FROM provider_fixture_mappings
-		WHERE UPPER(provider) = ? AND provider_fixture_id = ?
+		WHERE UPPER(provider) = ? AND (provider_fixture_id = ? OR provider_fixture_id = ? OR provider_fixture_id = ?)
+		ORDER BY (provider_fixture_id = ?) DESC
 		LIMIT 1
-	`, provider, providerFixtureID).Scan(&pfmFixtureID, &pfmSportID)
+	`, provider, providerFixtureID, cleanID, srID, providerFixtureID).Scan(&pfmFixtureID, &pfmSportID)
 	if pfmErr == nil && pfmFixtureID > 0 {
 		sportID, seq := canonical.ParseCanonicalNumericFixtureID(pfmFixtureID)
 		if pfmSportID > 0 {

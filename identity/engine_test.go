@@ -499,3 +499,116 @@ func TestTieredCacheResolution(t *testing.T) {
 		t.Errorf("expected Redis to be backfilled from DB, got %s, err %v", redisVal, rErr)
 	}
 }
+
+
+func TestNormalizeProviderFixtureID(t *testing.T) {
+	cases := []struct {
+		name      string
+		input     string
+		wantOrig  string
+		wantClean string
+		wantCands []string
+	}{
+		{
+			name:      "standard sr:match prefix",
+			input:     "sr:match:52641013",
+			wantOrig:  "sr:match:52641013",
+			wantClean: "52641013",
+			wantCands: []string{"sr:match:52641013", "52641013"},
+		},
+		{
+			name:      "standard sr:sport_event prefix",
+			input:     "sr:sport_event:52641013",
+			wantOrig:  "sr:sport_event:52641013",
+			wantClean: "52641013",
+			wantCands: []string{"sr:sport_event:52641013", "52641013"},
+		},
+		{
+			name:      "repeated prefixes in any order with whitespace",
+			input:     "  sr:sport_event:sr:match:52641013  ",
+			wantOrig:  "sr:sport_event:sr:match:52641013",
+			wantClean: "52641013",
+			wantCands: []string{"sr:sport_event:sr:match:52641013", "52641013"},
+		},
+		{
+			name:      "plain numeric ID",
+			input:     " 52641013 ",
+			wantOrig:  "52641013",
+			wantClean: "52641013",
+			wantCands: []string{"52641013"},
+		},
+		{
+			name:      "bare prefix rejected",
+			input:     "sr:match:",
+			wantOrig:  "",
+			wantClean: "",
+			wantCands: nil,
+		},
+		{
+			name:      "empty input rejected",
+			input:     "   ",
+			wantOrig:  "",
+			wantClean: "",
+			wantCands: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			orig, clean, cands := NormalizeProviderFixtureID(tc.input)
+			if orig != tc.wantOrig || clean != tc.wantClean {
+				t.Fatalf("NormalizeProviderFixtureID(%q) = (%q, %q), want (%q, %q)", tc.input, orig, clean, tc.wantOrig, tc.wantClean)
+			}
+			if len(cands) != len(tc.wantCands) {
+				t.Fatalf("NormalizeProviderFixtureID(%q) candidates = %v, want %v", tc.input, cands, tc.wantCands)
+			}
+			for i := range cands {
+				if cands[i] != tc.wantCands[i] {
+					t.Fatalf("candidate[%d] = %q, want %q", i, cands[i], tc.wantCands[i])
+				}
+			}
+		})
+	}
+}
+
+func TestResolveCanonicalIDPrefixAndProviderVariants(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	redis := NewMockRedis()
+	cache := NewTieredIdentityCache(redis, time.Hour)
+	engine := NewEngine(repo, cache)
+
+	startTime := time.Date(2026, 10, 30, 18, 0, 0, 0, time.UTC)
+	f, err := engine.ResolveOrCreateFixture(
+		ctx, "sportybet", "sr:match:52641013",
+		1, "Arsenal", "Liverpool", startTime,
+		17, "English Premier League", canonical.MappingPrematch, "sportybet",
+	)
+	if err != nil {
+		t.Fatalf("ResolveOrCreateFixture failed: %v", err)
+	}
+
+	// Must resolve whether queried with sr:match:, sr:sport_event:, or bare numeric ID,
+	// and across provider casing/aliases ("sportybet", "SPORTYBET", "SPORTSXBET").
+	queries := []struct {
+		provider string
+		pid      string
+	}{
+		{"sportybet", "sr:match:52641013"},
+		{"SPORTYBET", "52641013"},
+		{"SPORTSXBET", "sr:sport_event:52641013"},
+		{"sportybet", "  52641013  "},
+	}
+
+	for _, q := range queries {
+		cid, rErr := engine.ResolveCanonicalID(ctx, q.provider, q.pid)
+		if rErr != nil || cid != f.CanonicalFixtureID {
+			t.Errorf("ResolveCanonicalID(%q, %q) = (%q, %v), want %q", q.provider, q.pid, cid, rErr, f.CanonicalFixtureID)
+		}
+	}
+
+	// Bare prefix without ID must fail closed
+	if _, err := engine.ResolveCanonicalID(ctx, "sportybet", "sr:match:"); err == nil {
+		t.Errorf("expected error for bare prefix 'sr:match:', got nil")
+	}
+}

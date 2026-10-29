@@ -336,17 +336,17 @@ func TestInvariant10_BetTicketSettleabilityDecoupling(t *testing.T) {
 
 	// Immutable acceptance ticket snapshot
 	type TicketSnapshot struct {
-		TicketID           string
-		CanonicalFixtureID string
-		AcceptedProvider   string
-		AcceptedOdds       float64
+		TicketID            string
+		CanonicalFixtureID  string
+		AcceptedProvider    string
+		AcceptedOdds        float64
 		ResultResolutionKey string
 	}
 	ticket := TicketSnapshot{
-		TicketID:           "TKT-INV-10",
-		CanonicalFixtureID: f.CanonicalFixtureID,
-		AcceptedProvider:   "odibets",
-		AcceptedOdds:       2.10,
+		TicketID:            "TKT-INV-10",
+		CanonicalFixtureID:  f.CanonicalFixtureID,
+		AcceptedProvider:    "odibets",
+		AcceptedOdds:        2.10,
 		ResultResolutionKey: f.ResultResolutionKey,
 	}
 
@@ -362,7 +362,7 @@ func TestInvariant11_SettlementIdempotency(t *testing.T) {
 	ledger := make(map[string]bool)
 	var mu sync.Mutex
 
-	settleTicket := func(ticketID string, amount float64) bool {
+	settleTicket := func(ticketID string, _ float64) bool {
 		mu.Lock()
 		defer mu.Unlock()
 		if ledger[ticketID] {

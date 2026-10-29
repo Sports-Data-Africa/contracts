@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sports-Data-Africa/contracts/canonical"
 )
 
 // RedisClient defines the minimal interface required for L2 distributed caching.
@@ -31,28 +33,45 @@ func NewL1Cache() *L1Cache {
 }
 
 func makeAliasKey(provider, providerFixtureID string) string {
-	return fmt.Sprintf("%s:%s", strings.ToUpper(strings.TrimSpace(provider)), strings.TrimSpace(providerFixtureID))
+	normProvider := canonical.NormalizeProvider(provider)
+	return fmt.Sprintf("%s:%s", normProvider, strings.TrimSpace(providerFixtureID))
 }
 
 func (c *L1Cache) GetCanonicalID(provider, providerFixtureID string) (string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if cid, ok := c.aliases[makeAliasKey(provider, providerFixtureID)]; ok {
-		return cid, ok
+	trimmedPID := strings.TrimSpace(providerFixtureID)
+	if cid, ok := c.aliases[makeAliasKey(provider, trimmedPID)]; ok && cid != "" {
+		return cid, true
 	}
-	if cid, ok := c.aliases[fmt.Sprintf("%s:%s", provider, providerFixtureID)]; ok {
-		return cid, ok
+	rawProv := strings.TrimSpace(provider)
+	if cid, ok := c.aliases[fmt.Sprintf("%s:%s", strings.ToUpper(rawProv), trimmedPID)]; ok && cid != "" {
+		return cid, true
 	}
-	cid, ok := c.aliases[fmt.Sprintf("%s:%s", strings.ToLower(provider), providerFixtureID)]
-	return cid, ok
+	if cid, ok := c.aliases[fmt.Sprintf("%s:%s", rawProv, trimmedPID)]; ok && cid != "" {
+		return cid, true
+	}
+	cid, ok := c.aliases[fmt.Sprintf("%s:%s", strings.ToLower(rawProv), trimmedPID)]
+	return cid, ok && cid != ""
 }
 
 func (c *L1Cache) SetAlias(provider, providerFixtureID, canonicalID string) {
+	trimmedPID := strings.TrimSpace(providerFixtureID)
+	canonicalID = strings.TrimSpace(canonicalID)
+	if trimmedPID == "" || canonicalID == "" {
+		return
+	}
+	normProvider := canonical.NormalizeProvider(provider)
+	rawProv := strings.TrimSpace(provider)
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.aliases[makeAliasKey(provider, providerFixtureID)] = canonicalID
-	c.aliases[fmt.Sprintf("%s:%s", provider, providerFixtureID)] = canonicalID
-	c.aliases[fmt.Sprintf("%s:%s", strings.ToLower(provider), providerFixtureID)] = canonicalID
+	c.aliases[fmt.Sprintf("%s:%s", normProvider, trimmedPID)] = canonicalID
+	if rawProv != "" {
+		c.aliases[fmt.Sprintf("%s:%s", strings.ToUpper(rawProv), trimmedPID)] = canonicalID
+		c.aliases[fmt.Sprintf("%s:%s", rawProv, trimmedPID)] = canonicalID
+		c.aliases[fmt.Sprintf("%s:%s", strings.ToLower(rawProv), trimmedPID)] = canonicalID
+	}
 }
 
 func (c *L1Cache) GetFixture(canonicalID string) (*CanonicalFixture, bool) {
@@ -80,9 +99,9 @@ func (c *L1Cache) Clear() {
 
 // TieredIdentityCache coordinates L1 (local process memory) and L2 (Redis).
 type TieredIdentityCache struct {
-	l1       *L1Cache
-	l2       RedisClient
-	l2TTL    time.Duration
+	l1    *L1Cache
+	l2    RedisClient
+	l2TTL time.Duration
 }
 
 func NewTieredIdentityCache(l2 RedisClient, l2TTL time.Duration) *TieredIdentityCache {
@@ -103,24 +122,38 @@ func (tc *TieredIdentityCache) ResolveLocal(provider, providerFixtureID string) 
 
 // ResolveTiered checks L1, then L2 (Redis). If L2 hits, it backfills L1.
 func (tc *TieredIdentityCache) ResolveTiered(ctx context.Context, provider, providerFixtureID string) (string, bool) {
+	trimmedPID := strings.TrimSpace(providerFixtureID)
+	if trimmedPID == "" {
+		return "", false
+	}
+
 	// 1. Check L1 local cache
-	if cid, found := tc.l1.GetCanonicalID(provider, providerFixtureID); found {
+	if cid, found := tc.l1.GetCanonicalID(provider, trimmedPID); found {
 		return cid, true
 	}
 
 	// 2. Check L2 Redis cache if configured
 	if tc.l2 != nil {
-		key := fmt.Sprintf("identity:alias:%s:%s", provider, providerFixtureID)
-		cid, err := tc.l2.Get(ctx, key)
-		if err == nil && cid != "" {
-			tc.l1.SetAlias(provider, providerFixtureID, cid)
-			return cid, true
+		normProvider := canonical.NormalizeProvider(provider)
+		rawProv := strings.TrimSpace(provider)
+
+		keys := []string{
+			fmt.Sprintf("identity:alias:%s:%s", normProvider, trimmedPID),
 		}
-		upperProv := strings.ToUpper(provider)
-		if upperProv != provider {
-			upperKey := fmt.Sprintf("identity:alias:%s:%s", upperProv, providerFixtureID)
-			if cid, err := tc.l2.Get(ctx, upperKey); err == nil && cid != "" {
-				tc.l1.SetAlias(provider, providerFixtureID, cid)
+		if rawProv != "" && rawProv != normProvider {
+			keys = append(keys, fmt.Sprintf("identity:alias:%s:%s", rawProv, trimmedPID))
+		}
+		upperProv := strings.ToUpper(rawProv)
+		if upperProv != "" && upperProv != normProvider && upperProv != rawProv {
+			keys = append(keys, fmt.Sprintf("identity:alias:%s:%s", upperProv, trimmedPID))
+		}
+
+		for _, key := range keys {
+			if cid, err := tc.l2.Get(ctx, key); err == nil && cid != "" {
+				tc.l1.SetAlias(normProvider, trimmedPID, cid)
+				if rawProv != "" && rawProv != normProvider {
+					tc.l1.SetAlias(rawProv, trimmedPID, cid)
+				}
 				return cid, true
 			}
 		}
@@ -129,12 +162,26 @@ func (tc *TieredIdentityCache) ResolveTiered(ctx context.Context, provider, prov
 	return "", false
 }
 
-// PutAlias stores the alias in both L1 and L2.
+// PutAlias stores the alias in both L1 and L2 under the canonical normalized provider key.
 func (tc *TieredIdentityCache) PutAlias(ctx context.Context, provider, providerFixtureID, canonicalID string) {
-	tc.l1.SetAlias(provider, providerFixtureID, canonicalID)
+	trimmedPID := strings.TrimSpace(providerFixtureID)
+	canonicalID = strings.TrimSpace(canonicalID)
+	if trimmedPID == "" || canonicalID == "" {
+		return
+	}
+	normProvider := canonical.NormalizeProvider(provider)
+	tc.l1.SetAlias(normProvider, trimmedPID, canonicalID)
+	rawProv := strings.TrimSpace(provider)
+	if rawProv != "" && rawProv != normProvider {
+		tc.l1.SetAlias(rawProv, trimmedPID, canonicalID)
+	}
 	if tc.l2 != nil {
-		key := fmt.Sprintf("identity:alias:%s:%s", provider, providerFixtureID)
-		_ = tc.l2.Set(ctx, key, canonicalID, tc.l2TTL)
+		normKey := fmt.Sprintf("identity:alias:%s:%s", normProvider, trimmedPID)
+		_ = tc.l2.Set(ctx, normKey, canonicalID, tc.l2TTL)
+		if rawProv != "" && rawProv != normProvider {
+			rawKey := fmt.Sprintf("identity:alias:%s:%s", rawProv, trimmedPID)
+			_ = tc.l2.Set(ctx, rawKey, canonicalID, tc.l2TTL)
+		}
 	}
 }
 
@@ -153,14 +200,25 @@ func (tc *TieredIdentityCache) PutFixture(ctx context.Context, f *CanonicalFixtu
 	}
 }
 
-// Invalidate removes an alias from L1 and L2.
+// Invalidate removes an alias from L1 and L2 across normalized and raw provider keys.
 func (tc *TieredIdentityCache) Invalidate(ctx context.Context, provider, providerFixtureID string) {
-	key := makeAliasKey(provider, providerFixtureID)
+	trimmedPID := strings.TrimSpace(providerFixtureID)
+	normProvider := canonical.NormalizeProvider(provider)
+	rawProv := strings.TrimSpace(provider)
+
 	tc.l1.mu.Lock()
-	delete(tc.l1.aliases, key)
+	delete(tc.l1.aliases, fmt.Sprintf("%s:%s", normProvider, trimmedPID))
+	delete(tc.l1.aliases, fmt.Sprintf("%s:%s", strings.ToUpper(rawProv), trimmedPID))
+	delete(tc.l1.aliases, fmt.Sprintf("%s:%s", rawProv, trimmedPID))
+	delete(tc.l1.aliases, fmt.Sprintf("%s:%s", strings.ToLower(rawProv), trimmedPID))
 	tc.l1.mu.Unlock()
 
 	if tc.l2 != nil {
-		_ = tc.l2.Del(ctx, fmt.Sprintf("identity:alias:%s", key), fmt.Sprintf("identity:alias:%s:%s", provider, providerFixtureID))
+		_ = tc.l2.Del(
+			ctx,
+			fmt.Sprintf("identity:alias:%s:%s", normProvider, trimmedPID),
+			fmt.Sprintf("identity:alias:%s:%s", rawProv, trimmedPID),
+			fmt.Sprintf("identity:alias:%s:%s", strings.ToUpper(rawProv), trimmedPID),
+		)
 	}
 }

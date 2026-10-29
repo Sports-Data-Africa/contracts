@@ -170,7 +170,7 @@ func (e *Engine) ResolveOrCreateFixture(
 	return f, nil
 }
 
-// AttachAlias explicitly maps an external provider ID (e.g. Paripesa Live ID or AIScore Result ID)
+// AttachAlias explicitly maps an external provider ID (e.g. Odibets Live ID or AIScore Result ID)
 // to an existing canonical fixture and updates the tiered cache.
 func (e *Engine) AttachAlias(
 	ctx context.Context,

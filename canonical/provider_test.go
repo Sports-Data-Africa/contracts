@@ -51,7 +51,7 @@ func TestProviderRegistry_NormalizationAndDisplay(t *testing.T) {
 	}
 
 	// Verify that heuristic guesswork is NOT tolerated
-	guessworkInputs := []string{"ODI", "SPORTY", "ODDIX", "SPORTSX", "SR", "PARIPESA", "UNKNOWN"}
+	guessworkInputs := []string{"ODI", "SPORTY", "ODDIX", "SPORTSX", "SR", "UNKNOWN"}
 	for _, gw := range guessworkInputs {
 		norm := canonical.NormalizeProvider(gw)
 		if norm == canonical.ProviderSportsXBet || norm == canonical.ProviderOddixBets {

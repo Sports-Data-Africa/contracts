@@ -34,8 +34,7 @@ var ForbiddenKeys = []string{
 var ForbiddenValues = []string{
 	"sportybet",
 	"sporty",
-	"paripesa",
-	"pari",
+	"odibets",
 	"aiscore",
 	"flashscore",
 	"sofascore",
@@ -234,14 +233,14 @@ func TestProviderFailover_InvisibleToB2B(t *testing.T) {
 		t.Fatalf("Failed to convert initial event: %v", err)
 	}
 
-	// Internal commercial feed failover occurs: SPORTYBET stale -> PARIPESA active.
+	// Internal commercial feed failover occurs: SPORTYBET stale -> ODDIXBETS active.
 	// Market version increments to 102 with new odds (2.12).
 	failoverInternalEvent := &events.InternalMarketOddsUpdatedEvent{
-		EventID:          "evt-pp-102",
+		EventID:          "evt-ob-102",
 		FixtureID:        88001001,
 		SportID:          b2b.SportFootball,
-		CommercialFeed:   events.CommercialFeedParipesa,
-		FeedFixtureID:    "PARI-454567",
+		CommercialFeed:   events.CommercialFeedOddixBets,
+		FeedFixtureID:    "ODIX-454567",
 		MarketCode:       "1X2",
 		MarketVersion:    102,
 		IsSuspended:      false,
@@ -249,7 +248,7 @@ func TestProviderFailover_InvisibleToB2B(t *testing.T) {
 		IngestedAt:       time.Now().UnixMilli(),
 		PublishedAt:      time.Now().UnixMilli(),
 		Selections: []events.InternalSelection{
-			{Code: "HOME", Odds: 2.12, FeedSelectionID: "sel-pp-1"},
+			{Code: "HOME", Odds: 2.12, FeedSelectionID: "sel-ob-1"},
 		},
 	}
 
@@ -302,7 +301,7 @@ func TestVerificationConsensusAndConflict(t *testing.T) {
 
 func TestProviderAndVerificationSemanticSeparation(t *testing.T) {
 	// Commercial feeds MUST NOT be categorized as truth sources
-	commercialFeeds := []string{events.CommercialFeedSportybet, events.CommercialFeedParipesa}
+	commercialFeeds := []string{events.CommercialFeedSportybet, events.CommercialFeedOddixBets}
 	truthSources := []string{events.TruthSourceAiScore, events.TruthSourceFlashscore, events.TruthSourceSofaScore}
 
 	truthMap := make(map[string]bool)

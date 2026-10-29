@@ -28,7 +28,7 @@ func TestInvariant01_CanonicalFixtureFormat(t *testing.T) {
 	engine, _, _ := setupTestEngine()
 
 	f, err := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "PP-101",
+		ctx, "odibets", "OB-101",
 		canonical.SportIDFootball, "Liverpool FC", "Manchester City",
 		time.Date(2026, 9, 21, 15, 0, 0, 0, time.UTC),
 		1, "Premier League", canonical.MappingPrematch, "feed",
@@ -50,7 +50,7 @@ func TestInvariant01_CanonicalFixtureFormat(t *testing.T) {
 }
 
 // Invariant 2: Dual-Provider Prematch Convergence
-// SportyBet (SB-123) and Paripesa (PP-987) for the same real match converge to the EXACT same canonical ID.
+// SportyBet (SB-123) and Odibets (OB-987) for the same real match converge to the EXACT same canonical ID.
 func TestInvariant02_DualProviderPrematchConvergence(t *testing.T) {
 	ctx := context.Background()
 	engine, _, _ := setupTestEngine()
@@ -66,18 +66,18 @@ func TestInvariant02_DualProviderPrematchConvergence(t *testing.T) {
 		t.Fatalf("SportyBet resolution failed: %v", err)
 	}
 
-	// Paripesa discovers it second with different team casing/noise
+	// Odibets discovers it second with different team casing/noise
 	f2, err := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "PP-987",
+		ctx, "odibets", "OB-987",
 		canonical.SportIDFootball, "Real Madrid CF", "FC Barcelona",
-		kickoff, 25, "Spain Primera", canonical.MappingPrematch, "paripesa_vzip",
+		kickoff, 25, "Spain Primera", canonical.MappingPrematch, "odibets_vzip",
 	)
 	if err != nil {
-		t.Fatalf("Paripesa resolution failed: %v", err)
+		t.Fatalf("Odibets resolution failed: %v", err)
 	}
 
 	if f1.CanonicalFixtureID != f2.CanonicalFixtureID {
-		t.Fatalf("CRITICAL INVARIANT VIOLATION: SportyBet (%s) != Paripesa (%s)", f1.CanonicalFixtureID, f2.CanonicalFixtureID)
+		t.Fatalf("CRITICAL INVARIANT VIOLATION: SportyBet (%s) != Odibets (%s)", f1.CanonicalFixtureID, f2.CanonicalFixtureID)
 	}
 }
 
@@ -129,9 +129,9 @@ func TestInvariant04_HighConcurrencyRaceDefense(t *testing.T) {
 		idx := i
 		go func() {
 			defer wg.Done()
-			provID := fmt.Sprintf("PP-RACE-%d", idx)
+			provID := fmt.Sprintf("OB-RACE-%d", idx)
 			f, err := engine.ResolveOrCreateFixture(
-				ctx, "paripesa", provID,
+				ctx, "odibets", provID,
 				canonical.SportIDFootball, "Bayern Munich", "Borussia Dortmund",
 				kickoff, 5, "Bundesliga", canonical.MappingPrematch, "race_test",
 			)
@@ -192,14 +192,14 @@ func TestInvariant06_IdentityConflictRejection(t *testing.T) {
 
 	// Fixture A
 	f1, _ := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "PP-REASSIGN-1",
+		ctx, "odibets", "OB-REASSIGN-1",
 		canonical.SportIDFootball, "Juventus", "AC Milan",
 		time.Date(2026, 9, 21, 19, 45, 0, 0, time.UTC),
 		3, "Serie A", canonical.MappingPrematch, "test",
 	)
 
-	// Attempt to attach PP-REASSIGN-1 to a DIFFERENT fixture B
-	_, err := engine.AttachAlias(ctx, "SPD-FB-999999", "paripesa", "PP-REASSIGN-1", canonical.MappingPrematch, "malicious_attempt")
+	// Attempt to attach OB-REASSIGN-1 to a DIFFERENT fixture B
+	_, err := engine.AttachAlias(ctx, "SPD-FB-999999", "odibets", "OB-REASSIGN-1", canonical.MappingPrematch, "malicious_attempt")
 	if err == nil {
 		t.Fatalf("expected error on alias reassignment conflict, got nil")
 	}
@@ -208,7 +208,7 @@ func TestInvariant06_IdentityConflictRejection(t *testing.T) {
 	}
 
 	// Verify original mapping unchanged
-	cid, _ := engine.ResolveCanonicalID(ctx, "paripesa", "PP-REASSIGN-1")
+	cid, _ := engine.ResolveCanonicalID(ctx, "odibets", "OB-REASSIGN-1")
 	if cid != f1.CanonicalFixtureID {
 		t.Errorf("mapping corrupted after rejected conflict! Expected %s, got %s", f1.CanonicalFixtureID, cid)
 	}
@@ -245,7 +245,7 @@ func TestInvariant08_SettleabilityGate(t *testing.T) {
 	engine, repo, _ := setupTestEngine()
 
 	f, err := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "PP-GATE-1",
+		ctx, "odibets", "OB-GATE-1",
 		canonical.SportIDFootball, "Ajax", "Feyenoord",
 		time.Date(2026, 9, 21, 13, 30, 0, 0, time.UTC),
 		8, "Eredivisie", canonical.MappingPrematch, "test",
@@ -277,7 +277,7 @@ func TestInvariant08_SettleabilityGate(t *testing.T) {
 }
 
 // Invariant 9: Dual-Provider Failover
-// Primary stream (SportyBet) dies; secondary stream (Paripesa) seamlessly takes over without altering canonical ID.
+// Primary stream (SportyBet) dies; secondary stream (Odibets) seamlessly takes over without altering canonical ID.
 func TestInvariant09_DualProviderFailover(t *testing.T) {
 	ctx := context.Background()
 	engine, _, _ := setupTestEngine()
@@ -302,8 +302,8 @@ func TestInvariant09_DualProviderFailover(t *testing.T) {
 		t.Fatalf("mismatch on primary tick")
 	}
 
-	// [FAILOVER SIMULATION]: SportyBet feed dies! Paripesa takes over with PP-FAILOVER-9
-	paripesaCandidate := canonical.NaturalCandidate{
+	// [FAILOVER SIMULATION]: SportyBet feed dies! Odibets takes over with OB-FAILOVER-9
+	odibetsCandidate := canonical.NaturalCandidate{
 		SportID:         canonical.SportIDFootball,
 		HomeTeam:        "Paris Saint-Germain",
 		AwayTeam:        "Olympique de Marseille",
@@ -311,7 +311,7 @@ func TestInvariant09_DualProviderFailover(t *testing.T) {
 		CompetitionName: "French Ligue 1",
 	}
 
-	failoverFix, _, fErr := engine.ResolveJITLiveEvent(ctx, paripesaCandidate, "paripesa", "PP-FAILOVER-9", "failover_stream")
+	failoverFix, _, fErr := engine.ResolveJITLiveEvent(ctx, odibetsCandidate, "odibets", "OB-FAILOVER-9", "failover_stream")
 	if fErr != nil {
 		t.Fatalf("failover resolution failed: %v", fErr)
 	}
@@ -328,7 +328,7 @@ func TestInvariant10_BetTicketSettleabilityDecoupling(t *testing.T) {
 	engine, _, _ := setupTestEngine()
 
 	f, _ := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "PP-TICKET-1",
+		ctx, "odibets", "OB-TICKET-1",
 		canonical.SportIDFootball, "Porto", "Benfica",
 		time.Date(2026, 9, 21, 20, 30, 0, 0, time.UTC),
 		12, "Primeira Liga", canonical.MappingPrematch, "test",
@@ -345,7 +345,7 @@ func TestInvariant10_BetTicketSettleabilityDecoupling(t *testing.T) {
 	ticket := TicketSnapshot{
 		TicketID:           "TKT-INV-10",
 		CanonicalFixtureID: f.CanonicalFixtureID,
-		AcceptedProvider:   "paripesa",
+		AcceptedProvider:   "odibets",
 		AcceptedOdds:       2.10,
 		ResultResolutionKey: f.ResultResolutionKey,
 	}
@@ -441,7 +441,7 @@ func TestInvariant13_KickoffJitterTolerance(t *testing.T) {
 	// Provider B: 19:10 kickoff (+10m jitter)
 	t2 := time.Date(2026, 9, 21, 19, 10, 0, 0, time.UTC)
 	f2, _ := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "PP-TIME-2",
+		ctx, "odibets", "OB-TIME-2",
 		canonical.SportIDFootball, "Inter Milan", "Napoli",
 		t2, 3, "Serie A", canonical.MappingPrematch, "test",
 	)

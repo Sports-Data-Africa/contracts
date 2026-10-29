@@ -44,7 +44,7 @@ func (w *MockWalletService) Payout(idempotencyKey string, amount float64) error 
 
 // TestPrimaryAcceptance_FullLifecycleWithDivergentProviderIDs implements the mandatory
 // primary acceptance test:
-// Prematch (Paripesa 123456) -> Bet Placement (SPD-FB-456778) -> Live (Paripesa 987654) ->
+// Prematch (Odibets 123456) -> Bet Placement (SPD-FB-456778) -> Live (Odibets 987654) ->
 // Result (AIScore AS-88219) -> Settlement -> Idempotent Wallet Payout.
 // All three provider IDs differ (123456 != 987654 != AS-88219), but the entire lifecycle succeeds.
 func TestPrimaryAcceptance_FullLifecycleWithDivergentProviderIDs(t *testing.T) {
@@ -63,15 +63,15 @@ func TestPrimaryAcceptance_FullLifecycleWithDivergentProviderIDs(t *testing.T) {
 
 	// =========================================================================
 	// PHASE 1: PREMATCH INGESTION
-	// Provider: Paripesa, Fixture ID: 123456
+	// Provider: Odibets, Fixture ID: 123456
 	// =========================================================================
-	t.Log("[Phase 1] Ingesting Prematch Fixture from Paripesa (ID: 123456)")
+	t.Log("[Phase 1] Ingesting Prematch Fixture from Odibets (ID: 123456)")
 	prematchFixture, err := engine.ResolveOrCreateFixture(
 		ctx,
-		"paripesa", "123456",
+		"odibets", "123456",
 		sportID, homeTeam, awayTeam, startTime,
 		10, "Premier League",
-		canonical.MappingPrematch, "paripesa_prematch_vzip",
+		canonical.MappingPrematch, "odibets_prematch_vzip",
 	)
 	if err != nil {
 		t.Fatalf("Failed to resolve prematch fixture: %v", err)
@@ -107,16 +107,16 @@ func TestPrimaryAcceptance_FullLifecycleWithDivergentProviderIDs(t *testing.T) {
 
 	// =========================================================================
 	// PHASE 3: LIVE MATCH INGESTION
-	// Provider: Paripesa, Fixture ID: 987654 (DIFFERENT from Prematch ID 123456!)
+	// Provider: Odibets, Fixture ID: 987654 (DIFFERENT from Prematch ID 123456!)
 	// Identity Engine resolves 987654 -> SPD-FB-100001 via natural identity or alias
 	// =========================================================================
-	t.Log("[Phase 3] Ingesting Live in-play tick from Paripesa with DIFFERENT ID (987654)")
+	t.Log("[Phase 3] Ingesting Live in-play tick from Odibets with DIFFERENT ID (987654)")
 	liveFixture, err := engine.ResolveOrCreateFixture(
 		ctx,
-		"paripesa", "987654",
+		"odibets", "987654",
 		sportID, homeTeam, awayTeam, startTime,
 		10, "Premier League",
-		canonical.MappingLive, "paripesa_live_websocket",
+		canonical.MappingLive, "odibets_live_websocket",
 	)
 	if err != nil {
 		t.Fatalf("Failed to resolve live fixture: %v", err)
@@ -128,11 +128,11 @@ func TestPrimaryAcceptance_FullLifecycleWithDivergentProviderIDs(t *testing.T) {
 	}
 
 	// Verify both Prematch and Live IDs resolve to the same canonical ID from cache
-	cidFromPrematch, err := engine.ResolveCanonicalID(ctx, "paripesa", "123456")
+	cidFromPrematch, err := engine.ResolveCanonicalID(ctx, "odibets", "123456")
 	if err != nil || cidFromPrematch != canonicalID {
 		t.Fatalf("Failed to resolve prematch ID 123456: %s, err: %v", cidFromPrematch, err)
 	}
-	cidFromLive, err := engine.ResolveCanonicalID(ctx, "paripesa", "987654")
+	cidFromLive, err := engine.ResolveCanonicalID(ctx, "odibets", "987654")
 	if err != nil || cidFromLive != canonicalID {
 		t.Fatalf("Failed to resolve live ID 987654: %s, err: %v", cidFromLive, err)
 	}

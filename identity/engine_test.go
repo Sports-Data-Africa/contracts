@@ -333,9 +333,9 @@ func TestCanonicalFixtureCreationAndDeduplication(t *testing.T) {
 
 	startTime := time.Date(2026, 9, 18, 19, 0, 0, 0, time.UTC)
 
-	// Ingest Prematch Match from Paripesa
+	// Ingest Prematch Match from Odibets
 	f1, err := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "123456",
+		ctx, "odibets", "123456",
 		1, "Arsenal FC", "Chelsea FC", startTime,
 		10, "Premier League", canonical.MappingPrematch, "feed_vzip",
 	)
@@ -372,7 +372,7 @@ func TestMultipleProviderAliasesOneCanonicalFixture(t *testing.T) {
 
 	// 1. Prematch alias
 	f, err := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "123456",
+		ctx, "odibets", "123456",
 		1, "Liverpool", "Manchester City", startTime,
 		10, "Premier League", canonical.MappingPrematch, "prematch_line",
 	)
@@ -380,8 +380,8 @@ func TestMultipleProviderAliasesOneCanonicalFixture(t *testing.T) {
 		t.Fatalf("failed to create prematch: %v", err)
 	}
 
-	// 2. Attach Live alias (Paripesa live ID differs from prematch ID!)
-	_, err = engine.AttachAlias(ctx, f.CanonicalFixtureID, "paripesa", "987654", canonical.MappingLive, "live_socket")
+	// 2. Attach Live alias (Odibets live ID differs from prematch ID!)
+	_, err = engine.AttachAlias(ctx, f.CanonicalFixtureID, "odibets", "987654", canonical.MappingLive, "live_socket")
 	if err != nil {
 		t.Fatalf("failed to attach live alias: %v", err)
 	}
@@ -393,12 +393,12 @@ func TestMultipleProviderAliasesOneCanonicalFixture(t *testing.T) {
 	}
 
 	// Verify all three resolve to the exact same canonical fixture
-	cPrematch, err := engine.ResolveCanonicalID(ctx, "paripesa", "123456")
+	cPrematch, err := engine.ResolveCanonicalID(ctx, "odibets", "123456")
 	if err != nil || cPrematch != f.CanonicalFixtureID {
 		t.Errorf("prematch resolve failed: got %s, err %v", cPrematch, err)
 	}
 
-	cLive, err := engine.ResolveCanonicalID(ctx, "paripesa", "987654")
+	cLive, err := engine.ResolveCanonicalID(ctx, "odibets", "987654")
 	if err != nil || cLive != f.CanonicalFixtureID {
 		t.Errorf("live resolve failed: got %s, err %v", cLive, err)
 	}
@@ -419,20 +419,20 @@ func TestIdentityConflictRejection(t *testing.T) {
 
 	// Match 1
 	f1, _ := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "111111",
+		ctx, "odibets", "111111",
 		1, "Arsenal", "Chelsea", startTime,
 		1, "PL", canonical.MappingPrematch, "feed",
 	)
 
 	// Match 2 (different match)
 	f2, _ := engine.ResolveOrCreateFixture(
-		ctx, "paripesa", "222222",
+		ctx, "odibets", "222222",
 		1, "Real Madrid", "Barcelona", startTime,
 		2, "La Liga", canonical.MappingPrematch, "feed",
 	)
 
 	// Attempting to reassign provider ID "111111" to Match 2 must trigger an identity conflict
-	_, err := engine.AttachAlias(ctx, f2.CanonicalFixtureID, "paripesa", "111111", canonical.MappingLive, "malicious_feed")
+	_, err := engine.AttachAlias(ctx, f2.CanonicalFixtureID, "odibets", "111111", canonical.MappingLive, "malicious_feed")
 	if err == nil {
 		t.Fatal("expected error on alias reassignment conflict, got nil")
 	}

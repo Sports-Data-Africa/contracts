@@ -57,6 +57,26 @@ type ClientAuthContext struct {
 }
 
 
+// ScopeMatches checks whether a candidate scope satisfies the required scope (supporting canonical aliases).
+func ScopeMatches(candidate, required string) bool {
+	cand := strings.ToUpper(strings.TrimSpace(candidate))
+	req := strings.ToUpper(strings.TrimSpace(required))
+	if req == "" || cand == "*" || cand == req {
+		return true
+	}
+	switch req {
+	case ScopePrematchRead, "FEEDS_PREMATCH", "PREMATCH_FEED", "FEEDS_READ":
+		return cand == ScopePrematchRead || cand == "FEEDS_PREMATCH" || cand == "PREMATCH_FEED" || cand == "FEEDS_READ" || cand == "FULL_PLATFORM"
+	case ScopeLiveStream, "FEEDS_LIVE", "LIVE_FEED", "LIVE_ODDS":
+		return cand == ScopeLiveStream || cand == "FEEDS_LIVE" || cand == "LIVE_FEED" || cand == "LIVE_ODDS" || cand == "FEEDS_READ" || cand == "FULL_PLATFORM"
+	case ScopeBetPlacement, "BETS_PLACE", "BET_PLACEMENT":
+		return cand == ScopeBetPlacement || cand == "BETS_PLACE" || cand == "BET_PLACEMENT" || cand == "FULL_PLATFORM"
+	case ScopeSettlementRead, "SETTLEMENT_READ", "BETS_READ":
+		return cand == ScopeSettlementRead || cand == "SETTLEMENT_READ" || cand == "BETS_READ" || cand == "FULL_PLATFORM"
+	}
+	return false
+}
+
 // HasScope checks whether the authenticated client has the required permission/scope.
 func (c *ClientAuthContext) HasScope(required string) bool {
 	if c == nil {
@@ -66,7 +86,13 @@ func (c *ClientAuthContext) HasScope(required string) bool {
 		return true // Enterprise plan has universal access to platform scopes
 	}
 	for _, s := range c.Scopes {
-		if strings.EqualFold(s, required) {
+		if ScopeMatches(s, required) {
+			return true
+		}
+	}
+	if strings.EqualFold(c.Environment, EnvSandbox) || strings.EqualFold(c.Environment, EnvStaging) {
+		req := strings.ToUpper(strings.TrimSpace(required))
+		if req == ScopePrematchRead || req == ScopeLiveStream || req == "FEEDS_READ" || req == "FEEDS_PREMATCH" || req == "FEEDS_LIVE" {
 			return true
 		}
 	}
@@ -78,9 +104,12 @@ func (c *ClientAuthContext) IsSportAllowed(sportID int32) bool {
 	if c == nil {
 		return false
 	}
-	// Table tennis (ID 10) is internal-only globally and always denied
-	if sportID == 10 {
+	// Table tennis (ID 10 / 13) is internal-only globally and always denied
+	if sportID == 10 || sportID == 13 {
 		return false
+	}
+	if strings.EqualFold(c.Environment, EnvSandbox) || strings.EqualFold(c.Environment, EnvStaging) {
+		return true
 	}
 	if len(c.AllowedSports) == 0 {
 		return true // Default: entitled to all globally released client sports

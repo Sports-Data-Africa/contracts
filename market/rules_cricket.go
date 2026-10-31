@@ -8,10 +8,157 @@ import (
 
 func init() {
 	// Register Cricket (SportID 8) Rules
+	Register(&Cricket1X2Rule{})
+	Register(&CricketDrawNoBetRule{})
+	Register(&CricketDoubleChanceRule{})
 	Register(&CricketMatchWinnerRule{})
 	Register(&CricketTeamRunsRule{})
 	Register(&CricketMostSixesRule{})
 	Register(&CricketMostFoursRule{})
+}
+
+// ----------------------------------------------------------------------------
+// Cricket 1X2 / 3-Way (EVENT_END - Match Result including Draw/Tie)
+// ----------------------------------------------------------------------------
+type Cricket1X2Rule struct{}
+
+func (r *Cricket1X2Rule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 8, MarketCode: "CK_1X2", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *Cricket1X2Rule) RequiredDomain() string { return DomainScore }
+func (r *Cricket1X2Rule) Timing() string         { return TimingEventEnd }
+
+func (r *Cricket1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if state.Cricket == nil {
+		if !state.IsFinished {
+			return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+		}
+		h, a := state.Score.Home, state.Score.Away
+		sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+		won := (sel == "1" || sel == "HOME") && h > a ||
+			(sel == "X" || sel == "DRAW" || sel == "TIE") && h == a ||
+			(sel == "2" || sel == "AWAY") && a > h
+		if won {
+			return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		}
+		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+
+	if !state.Cricket.MatchCompleted && !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+
+	winner := state.Cricket.Winner
+	if winner == "NO_RESULT" || winner == "ABANDONED" {
+		return SettlementResult{Status: BetStatusVoid, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, Reason: "Cricket match abandoned / No Result", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	won := (sel == "1" || sel == "HOME") && winner == "1" ||
+		(sel == "2" || sel == "AWAY") && winner == "2" ||
+		(sel == "X" || sel == "DRAW" || sel == "TIE") && (winner == "DRAW" || winner == "TIE" || winner == "X")
+
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Cricket Draw No Bet (EVENT_END - with push on Draw/Tie)
+// ----------------------------------------------------------------------------
+type CricketDrawNoBetRule struct{}
+
+func (r *CricketDrawNoBetRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 8, MarketCode: "CK_DNB", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *CricketDrawNoBetRule) RequiredDomain() string { return DomainScore }
+func (r *CricketDrawNoBetRule) Timing() string         { return TimingEventEnd }
+
+func (r *CricketDrawNoBetRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if state.Cricket == nil {
+		if !state.IsFinished {
+			return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+		}
+		h, a := state.Score.Home, state.Score.Away
+		if h == a {
+			return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, Reason: "Match ended in a draw (DNB push)", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		}
+		sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+		if (sel == "1" || sel == "HOME") && h > a || (sel == "2" || sel == "AWAY") && a > h {
+			return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		}
+		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+
+	if !state.Cricket.MatchCompleted && !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+
+	winner := state.Cricket.Winner
+	if winner == "NO_RESULT" || winner == "ABANDONED" {
+		return SettlementResult{Status: BetStatusVoid, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, Reason: "Cricket match abandoned / No Result", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	if winner == "TIE" || winner == "DRAW" || winner == "X" {
+		return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, Reason: "Match tied/drawn (DNB push)", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if (sel == "1" || sel == "HOME") && winner == "1" || (sel == "2" || sel == "AWAY") && winner == "2" {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Cricket Double Chance (EVENT_END - 1X, 12, X2)
+// ----------------------------------------------------------------------------
+type CricketDoubleChanceRule struct{} 
+
+func (r *CricketDoubleChanceRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 8, MarketCode: "CK_DOUBLE_CHANCE", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *CricketDoubleChanceRule) RequiredDomain() string { return DomainScore }
+func (r *CricketDoubleChanceRule) Timing() string         { return TimingEventEnd }
+
+func (r *CricketDoubleChanceRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if state.Cricket == nil {
+		if !state.IsFinished {
+			return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+		}
+		h, a := state.Score.Home, state.Score.Away
+		sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+		won := (sel == "1X" && h >= a) ||
+			(sel == "12" && h != a) ||
+			(sel == "X2" && a >= h)
+		if won {
+			return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		}
+		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+
+	if !state.Cricket.MatchCompleted && !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+
+	winner := state.Cricket.Winner
+	if winner == "NO_RESULT" || winner == "ABANDONED" {
+		return SettlementResult{Status: BetStatusVoid, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, Reason: "Cricket match abandoned / No Result", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+
+	isH := winner == "1"
+	isA := winner == "2"
+	isD := winner == "DRAW" || winner == "TIE" || winner == "X"
+
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	won := (sel == "1X" && (isH || isD)) ||
+		(sel == "12" && (isH || isA)) ||
+		(sel == "X2" && (isD || isA))
+
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 }
 
 // ----------------------------------------------------------------------------

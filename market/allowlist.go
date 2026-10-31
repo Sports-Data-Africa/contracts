@@ -103,6 +103,12 @@ var (
 		"7:WINNER":       {SportID: 7, SportName: "Rugby", MarketCode: "WINNER", Period: PeriodFullTime, Rationale: "Full-time match score supported by feed"},
 
 		// 8. Cricket (SportID 8) - Match Winner
+		"8:CK_1X2":           {SportID: 8, SportName: "Cricket", MarketCode: "CK_1X2", Period: PeriodFullTime, Rationale: "Full-time match 1X2 result including draw"},
+		"8:1X2":              {SportID: 8, SportName: "Cricket", MarketCode: "CK_1X2", Period: PeriodFullTime, Rationale: "Full-time match 1X2 result including draw"},
+		"8:CK_DNB":           {SportID: 8, SportName: "Cricket", MarketCode: "CK_DNB", Period: PeriodFullTime, Rationale: "Draw no bet with push on draw"},
+		"8:DRAW_NO_BET":      {SportID: 8, SportName: "Cricket", MarketCode: "CK_DNB", Period: PeriodFullTime, Rationale: "Draw no bet with push on draw"},
+		"8:CK_DOUBLE_CHANCE": {SportID: 8, SportName: "Cricket", MarketCode: "CK_DOUBLE_CHANCE", Period: PeriodFullTime, Rationale: "Double chance from FT result"},
+		"8:DOUBLE_CHANCE":    {SportID: 8, SportName: "Cricket", MarketCode: "CK_DOUBLE_CHANCE", Period: PeriodFullTime, Rationale: "Double chance from FT result"},
 		"8:CK_MATCH_WINNER": {SportID: 8, SportName: "Cricket", MarketCode: "CK_MATCH_WINNER", Period: PeriodFullTime, Rationale: "Match winner supported by feed"},
 		"8:MATCH_WINNER":    {SportID: 8, SportName: "Cricket", MarketCode: "MATCH_WINNER", Period: PeriodFullTime, Rationale: "Match winner supported by feed"},
 		"8:WINNER":          {SportID: 8, SportName: "Cricket", MarketCode: "WINNER", Period: PeriodFullTime, Rationale: "Match winner supported by feed"},

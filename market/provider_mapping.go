@@ -655,16 +655,22 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 
 	case 8: // Cricket
 		switch {
-		case rawID == "1" || strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "match winner"):
+		case strings.Contains(normDesc, "1x2") || strings.Contains(normDesc, "3 way") || strings.Contains(normDesc, "match result") || (rawID == "1" && strings.Contains(normDesc, "draw")):
+			return "CK_1X2", PeriodFullTime, normSel
+		case rawID == "1" || strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "match winner") || strings.Contains(normDesc, "moneyline"):
 			return "CK_MATCH_WINNER", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "draw no bet") || strings.Contains(normDesc, "dnb"):
+			return "CK_DNB", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "double chance"):
+			return "CK_DOUBLE_CHANCE", PeriodFullTime, normalizeDoubleChance(rawSel)
 		case strings.Contains(normDesc, "team runs") || strings.Contains(normDesc, "runs over/under") || strings.Contains(normDesc, "total runs"):
 			return "CK_TEAM_RUNS", PeriodFullTime, normalizeOverUnder(rawSel)
 		case strings.Contains(normDesc, "most sixes"):
 			return "CK_MOST_SIXES", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "most fours"):
 			return "CK_MOST_FOURS", PeriodFullTime, normSel
-		}
 
+		}
 	case 9: // American Football
 		switch {
 		case rawID == "1" || strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "moneyline"):
@@ -902,10 +908,16 @@ func mapOdibets(sportID int, rawID, normDesc, rawSel string) (string, string, st
 
 	case 8: // Cricket
 		switch {
+		case strings.Contains(normDesc, "1x2") || strings.Contains(normDesc, "3 way"):
+			return "CK_1X2", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "match winner"):
 			return "CK_MATCH_WINNER", PeriodFullTime, normSel
-		}
+		case strings.Contains(normDesc, "draw no bet") || strings.Contains(normDesc, "dnb"):
+			return "CK_DNB", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "double chance"):
+			return "CK_DOUBLE_CHANCE", PeriodFullTime, normalizeDoubleChance(rawSel)
 
+		}
 	case 9: // American Football
 		switch {
 		case strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "moneyline"):

@@ -123,7 +123,7 @@ func TestGenerateCapabilityMatrixReport(t *testing.T) {
 	sb.WriteString("4. **Operator Trading Controls**: The operations dashboard can suspend any active market at will, but can never enable an uncertified or quarantined market.\n")
 	sb.WriteString("5. **Shadow Mode Isolation**: Real-money automatic payout remains strictly disabled (`SETTLEMENT_MODE=SHADOW`) until complete multi-service integration certification is performed.\n")
 
-	outPath := "../../CAPABILITY_MATRIX_REPORT.md"
+	outPath := "../../Reports/CAPABILITY_MATRIX_REPORT.md"
 	if err := os.WriteFile(outPath, []byte(sb.String()), 0644); err != nil {
 		t.Fatalf("failed to write capability report: %v", err)
 	}

@@ -211,6 +211,24 @@ type MarketPlacementRequest struct {
 //  5. Period is not supported for this sport.
 //  6. Required line is missing for totals or handicap markets.
 func CanPlaceMarketCanonical(req MarketPlacementRequest) (bool, string) {
+	// Release-readiness semantics: calls without an explicit workflow context are the
+	// prematch phase (the historical default). Live-phase callers must use
+	// CanPlaceMarketCanonicalWorkflow.
+	return canPlaceMarketCanonicalWorkflow(req, WorkflowPrematch)
+}
+
+// CanPlaceMarketCanonicalWorkflow resolves placement readiness for an explicit
+// betting phase. The live workflow carries its own release verdict (per operator
+// rules, live readiness is never inferred from prematch).
+func CanPlaceMarketCanonicalWorkflow(req MarketPlacementRequest, wf Workflow) (bool, string) {
+	return canPlaceMarketCanonicalWorkflow(req, wf)
+}
+
+// canPlaceMarketCanonicalWorkflow is the single release decision for bet placement.
+// Checks: sport released → catalogue definition ACTIVE → deterministic rule →
+// certified result domain → supported period → deterministic line → release
+// readiness (workflow-aware).
+func canPlaceMarketCanonicalWorkflow(req MarketPlacementRequest, wf Workflow) (bool, string) {
 	sportID := req.SportID
 	marketCode := strings.ToUpper(strings.TrimSpace(req.CanonicalMarketCode))
 	period := strings.ToUpper(strings.TrimSpace(req.Period))
@@ -265,6 +283,11 @@ func CanPlaceMarketCanonical(req MarketPlacementRequest) (bool, string) {
 	// 6. Deterministic Line Requirement
 	if def.HasLine && req.Line == nil {
 		return false, fmt.Sprintf("Market '%s' requires a deterministic line parameter", marketCode)
+	}
+
+	// 7. Operator Release Readiness (workflow-aware; see readiness.go)
+	if allowed, reason := releaseDecision(sportID, marketCode, period, wf); !allowed {
+		return false, reason
 	}
 
 	return true, ""

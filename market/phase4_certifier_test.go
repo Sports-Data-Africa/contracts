@@ -150,7 +150,7 @@ type Phase42RuleSemanticsMatrix struct {
 // TestPhase4_1_ForensicReconciliationMatrix reconciles all 169 definitions from MARKET_MAPPING_MATRIX.json
 // and asserts complete mathematical and identity consistency across all sports and categories.
 func TestPhase4_1_ForensicReconciliationMatrix(t *testing.T) {
-	matrixPath := `d:\Sports-Data-Africa\MARKET_MAPPING_MATRIX.json`
+	matrixPath := `d:\Sports-Data-Africa\Reports\MARKET_MAPPING_MATRIX.json`
 	matrixBytes, err := os.ReadFile(matrixPath)
 	if err != nil {
 		t.Fatalf("Failed to read MARKET_MAPPING_MATRIX.json: %v", err)
@@ -456,14 +456,14 @@ func TestPhase4_1_ForensicReconciliationMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to marshal recon matrix: %v", err)
 	}
-	_ = os.WriteFile(`d:\Sports-Data-Africa\PHASE_4_1_RECONCILIATION_MATRIX.json`, reconBytes, 0644)
+	_ = os.WriteFile(`d:\Sports-Data-Africa\Reports\PHASE_4_1_RECONCILIATION_MATRIX.json`, reconBytes, 0644)
 	_ = os.WriteFile(`C:\Users\HP\.gemini\antigravity-ide\brain\2d27cb1f-e841-42a4-83a5-518cb6e68224\PHASE_4_1_RECONCILIATION_MATRIX.json`, reconBytes, 0644)
 
 	certBytes, err := json.MarshalIndent(certMatrix, "", "  ")
 	if err != nil {
 		t.Fatalf("Failed to marshal cert matrix: %v", err)
 	}
-	_ = os.WriteFile(`d:\Sports-Data-Africa\SETTLEMENT_CERTIFICATION_MATRIX.json`, certBytes, 0644)
+	_ = os.WriteFile(`d:\Sports-Data-Africa\Reports\SETTLEMENT_CERTIFICATION_MATRIX.json`, certBytes, 0644)
 	_ = os.WriteFile(`C:\Users\HP\.gemini\antigravity-ide\brain\2d27cb1f-e841-42a4-83a5-518cb6e68224\SETTLEMENT_CERTIFICATION_MATRIX.json`, certBytes, 0644)
 
 	t.Logf("Phase 4.1 Forensic Reconciliation successfully validated and persisted: 169 Total, 46 Certified, 63 Not Certified, 60 Quarantined.")
@@ -811,7 +811,7 @@ func TestPhase4_ShadowReconciliationEvaluation(t *testing.T) {
 		t.Fatalf("Failed to marshal shadow report: %v", err)
 	}
 
-	_ = os.WriteFile(`d:\Sports-Data-Africa\SETTLEMENT_SHADOW_RECONCILIATION.json`, reconBytes, 0644)
+	_ = os.WriteFile(`d:\Sports-Data-Africa\Reports\SETTLEMENT_SHADOW_RECONCILIATION.json`, reconBytes, 0644)
 	_ = os.WriteFile(`C:\Users\HP\.gemini\antigravity-ide\brain\2d27cb1f-e841-42a4-83a5-518cb6e68224\SETTLEMENT_SHADOW_RECONCILIATION.json`, reconBytes, 0644)
 
 	t.Logf("Generated SETTLEMENT_SHADOW_RECONCILIATION.json: Total=%d, Matching=%d, Discrepancies=%d, WalletMutations=%d",
@@ -883,7 +883,7 @@ func TestPhase4_EventLifecycleAndEdgeCaseHandling(t *testing.T) {
 // 5. Half-time and period divergence boundary tests verify settlement isolates period outcomes.
 // 6. Produces PHASE_4_2_RULE_SEMANTICS_MATRIX.json with full cryptographic traceability.
 func TestPhase4_2_CertifiedRuleSemanticsAndResultDataIntegrityAudit(t *testing.T) {
-	matrixPath := `d:\Sports-Data-Africa\SETTLEMENT_CERTIFICATION_MATRIX.json`
+	matrixPath := `d:\Sports-Data-Africa\Reports\SETTLEMENT_CERTIFICATION_MATRIX.json`
 	data, err := os.ReadFile(matrixPath)
 	if err != nil {
 		t.Fatalf("Failed to read SETTLEMENT_CERTIFICATION_MATRIX.json: %v", err)
@@ -1152,7 +1152,7 @@ func TestPhase4_2_CertifiedRuleSemanticsAndResultDataIntegrityAudit(t *testing.T
 		t.Fatalf("Failed to marshal semantics matrix: %v", err)
 	}
 
-	_ = os.WriteFile(`d:\Sports-Data-Africa\PHASE_4_2_RULE_SEMANTICS_MATRIX.json`, semBytes, 0644)
+	_ = os.WriteFile(`d:\Sports-Data-Africa\Reports\PHASE_4_2_RULE_SEMANTICS_MATRIX.json`, semBytes, 0644)
 	_ = os.WriteFile(`C:\Users\HP\.gemini\antigravity-ide\brain\2d27cb1f-e841-42a4-83a5-518cb6e68224\PHASE_4_2_RULE_SEMANTICS_MATRIX.json`, semBytes, 0644)
 
 	t.Logf("Phase 4.2 Rule Semantics & Result-Data Integrity Audit completed: 46/46 Certified definitions verified fail-closed and period-isolated.")
@@ -1191,7 +1191,7 @@ func floatPtr(f float64) *float64 {
 // GenerateAuthoritativeMarkdownTables produces the programmatic markdown table string
 // for the per-sport summary and detailed certified definitions directly from the matrix.
 func GenerateAuthoritativeMarkdownTables() (string, string) {
-	data, err := os.ReadFile(`d:\Sports-Data-Africa\SETTLEMENT_CERTIFICATION_MATRIX.json`)
+	data, err := os.ReadFile(`d:\Sports-Data-Africa\Reports\SETTLEMENT_CERTIFICATION_MATRIX.json`)
 	if err != nil {
 		return "", ""
 	}

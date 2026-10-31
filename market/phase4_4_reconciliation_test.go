@@ -32,7 +32,7 @@ type InventoryReportTest struct {
 func TestPhase4_4_AuthoritativeInventoryAssertions(t *testing.T) {
 	// Locate PHASE_4_4_INVENTORY_RECONCILIATION.json
 	paths := []string{
-		"../../PHASE_4_4_INVENTORY_RECONCILIATION.json",
+		"../../PHASE_4_4_INVENTORY_RECONCILIATION.json", "../../Reports/PHASE_4_4_INVENTORY_RECONCILIATION.json", `d:\Sports-Data-Africa\Reports\PHASE_4_4_INVENTORY_RECONCILIATION.json`,
 		"../PHASE_4_4_INVENTORY_RECONCILIATION.json",
 		"PHASE_4_4_INVENTORY_RECONCILIATION.json",
 	}

@@ -48,8 +48,11 @@ func TestIsMarketSettleableAndAllowlisted_Matrix(t *testing.T) {
 		{"Ice Hockey Regulation 1X2", 4, "1X2", "Regulation 1X2 (3-Way)", true},
 		{"Table Tennis Match Winner", 13, "TT_MATCH_WINNER", "Match Winner", true},
 		{"MMA Method of Victory", 6, "MM_METHOD_OF_VICTORY", "Method of Victory", true},
-		{"Rugby Tries", 7, "TOTAL_TRIES", "Total Tries Over/Under 4.5", true},
-		{"Cricket Most Sixes", 8, "MOST_SIXES", "Most Sixes", true},
+		// Operator release decision (Reports/market_release_readiness.md List 2):
+		// these definitions are registered and rule-backed but their result-data
+		// sources are not evidenced, so they are DENIED until proven — expected false.
+		{"Rugby Tries", 7, "TOTAL_TRIES", "Total Tries Over/Under 4.5", false},
+		{"Cricket Most Sixes", 8, "MOST_SIXES", "Most Sixes", false},
 		{"Tennis Total Games", 3, "TOTAL_GAMES", "Total Games Over/Under 21.5", true},
 		{"American Football Released", 9, "AF_MONEYLINE", "Moneyline", true},
 		{"Handball Released", 10, "HB_1X2", "Match Result", true},

@@ -87,3 +87,4 @@ func TestCricketRulesAndMapping(t *testing.T) {
 		t.Fatalf("expected BetStatusWon for 1X on DRAW, got %s", settle1X.Status)
 	}
 }
+

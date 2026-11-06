@@ -16,6 +16,10 @@ func init() {
 	Register(&BasketballQuarterTotalsRule{Quarter: PeriodQuarter2})
 	Register(&BasketballQuarterTotalsRule{Quarter: PeriodQuarter3})
 	Register(&BasketballQuarterTotalsRule{Quarter: PeriodQuarter4})
+	Register(&BasketballQuarterSpreadRule{Quarter: PeriodQuarter1})
+	Register(&BasketballQuarterSpreadRule{Quarter: PeriodQuarter2})
+	Register(&BasketballQuarterSpreadRule{Quarter: PeriodQuarter3})
+	Register(&BasketballQuarterSpreadRule{Quarter: PeriodQuarter4})
 	Register(&BasketballQuarterWinnerRule{Quarter: PeriodQuarter1})
 	Register(&BasketballQuarterWinnerRule{Quarter: PeriodQuarter2})
 	Register(&BasketballQuarterWinnerRule{Quarter: PeriodQuarter3})
@@ -241,6 +245,49 @@ func (r *BasketballQuarterTotalsRule) Evaluate(state CanonicalEventState, bet Be
 	}
 
 	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: DomainPeriodScore}
+}
+
+// ----------------------------------------------------------------------------
+// Quarter Spread (Q1-Q4) (PERIOD_END)
+// ----------------------------------------------------------------------------
+type BasketballQuarterSpreadRule struct {
+	Quarter string
+}
+
+func (r *BasketballQuarterSpreadRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 2, MarketCode: "BB_QUARTER_SPREAD", Period: r.Quarter, RuleVersion: 1}
+}
+func (r *BasketballQuarterSpreadRule) RequiredDomain() string { return DomainPeriodScore }
+func (r *BasketballQuarterSpreadRule) Timing() string         { return TimingPeriodEnd }
+
+func (r *BasketballQuarterSpreadRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	qScore, ok := state.PeriodScores[r.Quarter]
+	isQuarterDone := state.IsPeriodFinished[r.Quarter] || state.IsFinished
+
+	if !isQuarterDone || !ok {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore}
+	}
+
+	spread := 0.0
+	if bet.Line != nil {
+		spread = *bet.Line
+	}
+	h, a := float64(qScore.Home), float64(qScore.Away)
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+
+	var diff float64
+	if sel == "1" || sel == "HOME" {
+		diff = (h + spread) - a
+	} else {
+		diff = (a + spread) - h
+	}
+
+	if diff > 0 {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+	} else if diff == 0 {
+		return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, Reason: "Quarter spread landed on handicap line (push)", RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 }
 
 // ----------------------------------------------------------------------------

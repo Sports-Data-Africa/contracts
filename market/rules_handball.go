@@ -22,6 +22,7 @@ func init() {
 	Register(&HandballDNBRule{})
 	Register(&HandballDoubleChanceRule{})
 	Register(&HandballOddEvenRule{})
+	Register(&HandballWinningMarginRule{})
 }
 
 // ----------------------------------------------------------------------------
@@ -350,6 +351,60 @@ func (r *HandballOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelecti
 	isEven := tot%2 == 0
 	won := (isEven && (sel == "EVEN" || sel == "E")) || (!isEven && (sel == "ODD" || sel == "O"))
 	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Handball Winning Margin Bands (EVENT_END)
+// Selections: HOME_1_2, HOME_3_5, HOME_6_8, HOME_9_PLUS, AWAY_1_2, AWAY_3_5, AWAY_6_8, AWAY_9_PLUS, DRAW
+// ----------------------------------------------------------------------------
+type HandballWinningMarginRule struct{}
+
+func (r *HandballWinningMarginRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 10, MarketCode: "HB_WINNING_MARGIN", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *HandballWinningMarginRule) RequiredDomain() string { return DomainScore }
+func (r *HandballWinningMarginRule) Timing() string         { return TimingEventEnd }
+
+func (r *HandballWinningMarginRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+	h, a := state.Score.Home, state.Score.Away
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+
+	diff := h - a
+	var winningSel string
+	if diff == 0 {
+		winningSel = "DRAW"
+	} else if diff > 0 {
+		switch {
+		case diff >= 1 && diff <= 2:
+			winningSel = "HOME_1_2"
+		case diff >= 3 && diff <= 5:
+			winningSel = "HOME_3_5"
+		case diff >= 6 && diff <= 8:
+			winningSel = "HOME_6_8"
+		default:
+			winningSel = "HOME_9_PLUS"
+		}
+	} else {
+		posDiff := -diff
+		switch {
+		case posDiff >= 1 && posDiff <= 2:
+			winningSel = "AWAY_1_2"
+		case posDiff >= 3 && posDiff <= 5:
+			winningSel = "AWAY_3_5"
+		case posDiff >= 6 && posDiff <= 8:
+			winningSel = "AWAY_6_8"
+		default:
+			winningSel = "AWAY_9_PLUS"
+		}
+	}
+
+	if sel == winningSel {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 	}
 	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}

@@ -13,6 +13,7 @@ func init() {
 	Register(&BaseballTotalsRule{IncludesExtraInnings: true})
 	Register(&BaseballFirst5InningsRule{})
 	Register(&BaseballF5TotalsRule{})
+	Register(&BaseballF5RunLineRule{})
 	Register(&BaseballOddEvenRule{})
 }
 
@@ -276,4 +277,57 @@ func (r *BaseballOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelecti
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainInnings, EvaluatedAt: time.Now()}
 	}
 	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainInnings, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// First 5 Innings Run Line / Spread (BS_F5_RUN_LINE)
+// ----------------------------------------------------------------------------
+type BaseballF5RunLineRule struct{}
+
+func (r *BaseballF5RunLineRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 11, MarketCode: "BS_F5_RUN_LINE", Period: "F5", RuleVersion: 1}
+}
+func (r *BaseballF5RunLineRule) RequiredDomain() string { return DomainInnings }
+func (r *BaseballF5RunLineRule) Timing() string         { return TimingPeriodEnd }
+
+func (r *BaseballF5RunLineRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if state.Baseball == nil {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainInnings}
+	}
+	h5, a5 := 0, 0
+	f5Completed := 0
+	for _, in := range state.Baseball.Innings {
+		if in.InningNumber <= 5 && in.IsFinished {
+			h5 += in.HomeRuns
+			a5 += in.AwayRuns
+			f5Completed++
+		}
+	}
+
+	if f5Completed < 5 {
+		if state.Baseball.IncompleteGameCalled {
+			return SettlementResult{Status: BetStatusVoid, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, Reason: "Incomplete game - F5 void", RequiredDomain: DomainInnings, EvaluatedAt: time.Now()}
+		}
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainInnings}
+	}
+
+	spread := 0.0
+	if bet.Line != nil {
+		spread = *bet.Line
+	}
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+
+	var diff float64
+	if sel == "1" || sel == "HOME" {
+		diff = (float64(h5) + spread) - float64(a5)
+	} else {
+		diff = (float64(a5) + spread) - float64(h5)
+	}
+
+	if diff > 0 {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainInnings, EvaluatedAt: time.Now()}
+	} else if diff == 0 {
+		return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, Reason: "F5 run line push", RequiredDomain: DomainInnings, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainInnings, EvaluatedAt: time.Now()}
 }

@@ -22,6 +22,7 @@ func init() {
 	Register(&IceHockeyTeamTotalsRule{Team: "HOME"})
 	Register(&IceHockeyTeamTotalsRule{Team: "AWAY"})
 	Register(&IceHockeyTeamTotalsRule{Team: ""})
+	Register(&IceHockeyHighestScoringPeriodRule{})
 }
 
 // ----------------------------------------------------------------------------
@@ -353,4 +354,52 @@ func (r *IceHockeyTeamTotalsRule) Evaluate(state CanonicalEventState, bet BetSel
 		}
 	}
 	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: DomainScore}
+}
+
+// ----------------------------------------------------------------------------
+// Highest Scoring Period (EVENT_END - P1, P2, P3, EQUAL)
+// ----------------------------------------------------------------------------
+type IceHockeyHighestScoringPeriodRule struct{}
+
+func (r *IceHockeyHighestScoringPeriodRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 4, MarketCode: "IH_HIGHEST_SCORING_PERIOD", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *IceHockeyHighestScoringPeriodRule) RequiredDomain() string { return DomainPeriodScore }
+func (r *IceHockeyHighestScoringPeriodRule) Timing() string         { return TimingEventEnd }
+
+func (r *IceHockeyHighestScoringPeriodRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainPeriodScore}
+	}
+	p1Score := state.PeriodScores["P1"]
+	p2Score := state.PeriodScores["P2"]
+	p3Score := state.PeriodScores["P3"]
+
+	p1Total := p1Score.Home + p1Score.Away
+	p2Total := p2Score.Home + p2Score.Away
+	p3Total := p3Score.Home + p3Score.Away
+
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+
+	var winningSel string
+	if p1Total > p2Total && p1Total > p3Total {
+		winningSel = "1"
+	} else if p2Total > p1Total && p2Total > p3Total {
+		winningSel = "2"
+	} else if p3Total > p1Total && p3Total > p2Total {
+		winningSel = "3"
+	} else {
+		winningSel = "EQUAL"
+	}
+
+	won := (sel == winningSel) ||
+		(winningSel == "1" && (sel == "P1" || sel == "PERIOD 1")) ||
+		(winningSel == "2" && (sel == "P2" || sel == "PERIOD 2")) ||
+		(winningSel == "3" && (sel == "P3" || sel == "PERIOD 3")) ||
+		(winningSel == "EQUAL" && (sel == "DRAW" || sel == "TIE" || sel == "X"))
+
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 }

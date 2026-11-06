@@ -75,6 +75,7 @@ var (
 		"2:OVER_UNDER":      {SportID: 2, SportName: "Basketball", MarketCode: "OVER_UNDER", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game totals including OT supported by feed"},
 		"2:TOTAL_POINTS":    {SportID: 2, SportName: "Basketball", MarketCode: "TOTAL_POINTS", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game totals including OT supported by feed"},
 		"2:BB_SPREAD":       {SportID: 2, SportName: "Basketball", MarketCode: "BB_SPREAD", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game spread including OT supported by feed"},
+		"2:BB_QUARTER_SPREAD": {SportID: 2, SportName: "Basketball", MarketCode: "BB_QUARTER_SPREAD", Period: PeriodFullTime, Rationale: "Quarter spread from PeriodScores"},
 		"2:SPREAD":          {SportID: 2, SportName: "Basketball", MarketCode: "SPREAD", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game spread including OT supported by feed"},
 		"2:HANDICAP":        {SportID: 2, SportName: "Basketball", MarketCode: "HANDICAP", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game spread including OT supported by feed"},
 
@@ -83,6 +84,7 @@ var (
 		"4:MONEYLINE":    {SportID: 4, SportName: "Ice Hockey", MarketCode: "MONEYLINE", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game moneyline including OT/SO supported"},
 		"4:WINNER":       {SportID: 4, SportName: "Ice Hockey", MarketCode: "WINNER", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game moneyline including OT/SO supported"},
 		"4:MATCH_WINNER": {SportID: 4, SportName: "Ice Hockey", MarketCode: "MATCH_WINNER", RequiresOT: true, Period: PeriodFullTime, Rationale: "Full game moneyline including OT/SO supported"},
+		"4:IH_HIGHEST_SCORING_PERIOD": {SportID: 4, SportName: "Ice Hockey", MarketCode: "IH_HIGHEST_SCORING_PERIOD", Period: PeriodFullTime, Rationale: "Highest scoring period from P1/P2/P3 scores"},
 
 		// 3. Tennis (SportID 3) - Match Winner (Sets)
 		"3:TN_MATCH_WINNER": {SportID: 3, SportName: "Tennis", MarketCode: "TN_MATCH_WINNER", Period: PeriodFullTime, Rationale: "Match set score supported via SetScore wire"},
@@ -284,6 +286,7 @@ var (
 		"11:BS_RUN_LINE":      {SportID: 11, SportName: "Baseball", MarketCode: "BS_RUN_LINE", RequiresOT: true, Period: PeriodFullTime, Rationale: "1.5 run line from DomainInnings certified"},
 		"11:BS_TOTAL_RUNS":    {SportID: 11, SportName: "Baseball", MarketCode: "BS_TOTAL_RUNS", RequiresOT: true, Period: PeriodFullTime, Rationale: "Total runs O/U from DomainInnings certified"},
 		"11:BS_F5_MONEYLINE":  {SportID: 11, SportName: "Baseball", MarketCode: "BS_F5_MONEYLINE", Period: "F5", Rationale: "First 5 innings winner from innings data"},
+		"11:BS_F5_RUN_LINE":   {SportID: 11, SportName: "Baseball", MarketCode: "BS_F5_RUN_LINE", Period: "F5", Rationale: "First 5 innings run line from innings data"},
 		"11:BS_F5_TOTAL":      {SportID: 11, SportName: "Baseball", MarketCode: "BS_F5_TOTAL", Period: "F5", Rationale: "First 5 innings runs O/U from innings data"},
 		"11:BS_F7_MONEYLINE":  {SportID: 11, SportName: "Baseball", MarketCode: "BS_F7_MONEYLINE", Period: "F7", Rationale: "First 7 innings winner from innings data"},
 		"11:BS_F7_TOTAL":      {SportID: 11, SportName: "Baseball", MarketCode: "BS_F7_TOTAL", Period: "F7", Rationale: "First 7 innings total from innings data"},

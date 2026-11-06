@@ -561,6 +561,21 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			}
 			return "BB_TOTAL_POINTS", PeriodFullTime, normalizeOverUnder(rawSel)
 		case strings.Contains(normDesc, "spread") || strings.Contains(normDesc, "handicap"):
+			if strings.Contains(normDesc, "q1") || strings.Contains(normDesc, "1st quarter") {
+				return "BB_QUARTER_SPREAD", PeriodQuarter1, normSel
+			}
+			if strings.Contains(normDesc, "q2") || strings.Contains(normDesc, "2nd quarter") {
+				return "BB_QUARTER_SPREAD", PeriodQuarter2, normSel
+			}
+			if strings.Contains(normDesc, "q3") || strings.Contains(normDesc, "3rd quarter") {
+				return "BB_QUARTER_SPREAD", PeriodQuarter3, normSel
+			}
+			if strings.Contains(normDesc, "q4") || strings.Contains(normDesc, "4th quarter") {
+				return "BB_QUARTER_SPREAD", PeriodQuarter4, normSel
+			}
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") {
+				return "BB_1H_SPREAD", PeriodHalfTime, normSel
+			}
 			return "BB_SPREAD", PeriodFullTime, normSel
 		}
 
@@ -630,6 +645,8 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 				return "IH_AWAY_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
 			}
 			return "IH_TOTAL_GOALS", PeriodFullTime, normalizeOverUnder(rawSel)
+		case strings.Contains(normDesc, "highest scoring period"):
+			return "IH_HIGHEST_SCORING_PERIOD", PeriodFullTime, rawSel
 		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
 			return "IH_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
@@ -782,6 +799,8 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 				return "HB_TOTAL_GOALS", PeriodHalfTime, normalizeOverUnder(rawSel)
 			}
 			return "HB_TOTAL_GOALS", PeriodFullTime, normalizeOverUnder(rawSel)
+		case strings.Contains(normDesc, "winning margin") || strings.Contains(normDesc, "margin"):
+			return "HB_WINNING_MARGIN", PeriodFullTime, rawSel
 		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
 			return "HB_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
@@ -793,7 +812,10 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 				return "BS_F5_MONEYLINE", "F5", normSel
 			}
 			return "BS_MONEYLINE", PeriodFullTime, normSel
-		case strings.Contains(normDesc, "run line") || strings.Contains(normDesc, "spread"):
+		case strings.Contains(normDesc, "run line") || strings.Contains(normDesc, "spread") || strings.Contains(normDesc, "handicap"):
+			if strings.Contains(normDesc, "first 5") || strings.Contains(normDesc, "f5") {
+				return "BS_F5_RUN_LINE", "F5", normSel
+			}
 			return "BS_RUN_LINE", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "total runs") || strings.Contains(normDesc, "over/under"):
 			if strings.Contains(normDesc, "first 5") || strings.Contains(normDesc, "f5") {
@@ -958,6 +980,21 @@ func mapOdibets(sportID int, rawID, normDesc, rawSel string) (string, string, st
 		case strings.Contains(normDesc, "totals") || strings.Contains(normDesc, "total points") || strings.Contains(normDesc, "over/under"):
 			return "BB_TOTAL_POINTS", PeriodFullTime, normalizeOverUnder(rawSel)
 		case strings.Contains(normDesc, "spread") || strings.Contains(normDesc, "handicap"):
+			if strings.Contains(normDesc, "q1") || strings.Contains(normDesc, "1st quarter") {
+				return "BB_QUARTER_SPREAD", PeriodQuarter1, normSel
+			}
+			if strings.Contains(normDesc, "q2") || strings.Contains(normDesc, "2nd quarter") {
+				return "BB_QUARTER_SPREAD", PeriodQuarter2, normSel
+			}
+			if strings.Contains(normDesc, "q3") || strings.Contains(normDesc, "3rd quarter") {
+				return "BB_QUARTER_SPREAD", PeriodQuarter3, normSel
+			}
+			if strings.Contains(normDesc, "q4") || strings.Contains(normDesc, "4th quarter") {
+				return "BB_QUARTER_SPREAD", PeriodQuarter4, normSel
+			}
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") {
+				return "BB_1H_SPREAD", PeriodHalfTime, normSel
+			}
 			return "BB_SPREAD", PeriodFullTime, normSel
 		}
 

@@ -362,7 +362,15 @@ var releaseDenialSeeds = []struct {
 		"corners counts proven for live settlement is pending (operator staging gate)"},
 	{1, "FB_CORNERS_1X2", PeriodFullTime, true,
 		"corners counts proven for live settlement is pending (operator staging gate)"},
+	{1, "FB_CORNERS_ODD_EVEN", PeriodFullTime, true,
+		"corners counts proven for live settlement is pending (operator staging gate)"},
+	{1, "FB_HT_CORNERS_TOTAL", PeriodHalfTime, true,
+		"corners counts proven for live settlement is pending (operator staging gate)"},
 	{1, "FB_CARDS_TOTAL", PeriodFullTime, true,
+		"cards counts proven for live settlement is pending (operator staging gate)"},
+	{1, "FB_CARDS_1X2", PeriodFullTime, true,
+		"cards counts proven for live settlement is pending (operator staging gate)"},
+	{1, "FB_CARDS_ODD_EVEN", PeriodFullTime, true,
 		"cards counts proven for live settlement is pending (operator staging gate)"},
 }
 

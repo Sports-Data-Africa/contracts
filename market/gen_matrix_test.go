@@ -217,3 +217,4 @@ func TestGenerateContractCertificationMatrixCSV(t *testing.T) {
 
 	t.Logf("Successfully wrote %d canonical contracts to %s", len(records)-1, targetPath)
 }
+

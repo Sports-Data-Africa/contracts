@@ -592,7 +592,7 @@ func init() {
 			SettlementTiming:     TimingEventEnd,
 			RuleVersion:          1,
 			SupportedSelections:  []string{"1", "X", "2"},
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 		{
 			SportID:              1,
@@ -604,7 +604,7 @@ func init() {
 			RuleVersion:          1,
 			SupportedSelections:  []string{"OVER", "UNDER"},
 			HasLine:              true,
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 		{
 			SportID:              1,
@@ -616,7 +616,7 @@ func init() {
 			RuleVersion:          1,
 			SupportedSelections:  []string{"OVER", "UNDER"},
 			HasLine:              true,
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 		{
 			SportID:              1,
@@ -638,7 +638,7 @@ func init() {
 			SettlementTiming:     TimingEventEnd,
 			RuleVersion:          1,
 			SupportedSelections:  []string{"ODD", "EVEN"},
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 		{
 			SportID:              1,
@@ -649,7 +649,7 @@ func init() {
 			SettlementTiming:     TimingEventEnd,
 			RuleVersion:          1,
 			SupportedSelections:  []string{"ODD", "EVEN"},
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 		{
 			SportID:              1,
@@ -660,7 +660,7 @@ func init() {
 			SettlementTiming:     TimingEventEnd,
 			RuleVersion:          1,
 			SupportedSelections:  []string{"1", "X", "2"},
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 		{
 			SportID:              1,
@@ -672,7 +672,7 @@ func init() {
 			RuleVersion:          1,
 			SupportedSelections:  []string{"OVER", "UNDER"},
 			HasLine:              true,
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 
 		// --------------------------------------------------------------------
@@ -1450,7 +1450,7 @@ func init() {
 			RuleVersion:          1,
 			SupportedSelections:  []string{"OVER", "UNDER"},
 			HasLine:              true,
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 
 		// --------------------------------------------------------------------
@@ -1521,7 +1521,7 @@ func init() {
 			SettlementTiming:     TimingEventEnd,
 			RuleVersion:          1,
 			SupportedSelections:  []string{"1", "X", "2"},
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 		{
 			SportID:              8,
@@ -1532,7 +1532,7 @@ func init() {
 			SettlementTiming:     TimingEventEnd,
 			RuleVersion:          1,
 			SupportedSelections:  []string{"1", "X", "2"},
-			Status:               MarketStatusActive,
+			Status:               MarketStatusSuspended,
 		},
 
 		// --------------------------------------------------------------------

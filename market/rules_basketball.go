@@ -21,6 +21,8 @@ func init() {
 	Register(&BasketballQuarterWinnerRule{Quarter: PeriodQuarter3})
 	Register(&BasketballQuarterWinnerRule{Quarter: PeriodQuarter4})
 	Register(&BasketballHalfWinnerRule{})
+	Register(&BasketballHalfSpreadRule{})
+	Register(&BasketballOddEvenRule{})
 }
 
 // ----------------------------------------------------------------------------
@@ -310,4 +312,70 @@ func (r *BasketballHalfWinnerRule) Evaluate(state CanonicalEventState, bet BetSe
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 	}
 	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+}
+
+
+// ----------------------------------------------------------------------------
+// 1st Half Spread (PERIOD_END)
+// ----------------------------------------------------------------------------
+type BasketballHalfSpreadRule struct{}
+
+func (r *BasketballHalfSpreadRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 2, MarketCode: "BB_1H_SPREAD", Period: PeriodHalfTime, RuleVersion: 1}
+}
+func (r *BasketballHalfSpreadRule) RequiredDomain() string { return DomainPeriodScore }
+func (r *BasketballHalfSpreadRule) Timing() string         { return TimingPeriodEnd }
+
+func (r *BasketballHalfSpreadRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	ht, ok := state.PeriodScores["1H"]
+	if !ok {
+		ht, ok = state.PeriodScores["HT"]
+	}
+	isHTDone := state.IsPeriodFinished[PeriodHalfTime] || state.Status == FixtureStatusHT || state.IsFinished
+	if !ok || !isHTDone {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore}
+	}
+	spread := 0.0
+	if bet.Line != nil {
+		spread = *bet.Line
+	}
+	h, a := float64(ht.Home), float64(ht.Away)
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	var diff float64
+	if sel == "1" || sel == "HOME" {
+		diff = (h + spread) - a
+	} else {
+		diff = (a + spread) - h
+	}
+	if diff > 0 {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+	} else if diff == 0 {
+		return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, Reason: "1H spread push", RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Odd/Even Total Points (EVENT_END)
+// ----------------------------------------------------------------------------
+type BasketballOddEvenRule struct{}
+
+func (r *BasketballOddEvenRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 2, MarketCode: "BB_ODD_EVEN", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *BasketballOddEvenRule) RequiredDomain() string { return DomainScore }
+func (r *BasketballOddEvenRule) Timing() string         { return TimingEventEnd }
+
+func (r *BasketballOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+	tot := state.Score.Home + state.Score.Away
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isEven := tot%2 == 0
+	won := (isEven && (sel == "EVEN" || sel == "E")) || (!isEven && (sel == "ODD" || sel == "O"))
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 }

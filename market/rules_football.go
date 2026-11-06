@@ -30,6 +30,11 @@ func init() {
 	Register(&FootballCorners1X2Rule{})
 	Register(&FootballCornersTotalRule{})
 	Register(&FootballCardsTotalRule{})
+	Register(&FootballCornersOddEvenRule{})
+	Register(&FootballCardsOddEvenRule{})
+	Register(&FootballCards1X2Rule{})
+	Register(&Football2HBTTSRule{})
+	Register(&FootballHTCornersTotalRule{})
 
 	// Phase 1 Additional Verified Score-Derived Settlement Rules:
 	Register(&FootballHTBTTSRule{})
@@ -2154,4 +2159,193 @@ func (r *FootballBTTSTotalsRule) Evaluate(state CanonicalEventState, bet BetSele
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 	}
 	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+}
+
+
+// ----------------------------------------------------------------------------
+// Corners Odd/Even (EVENT_END - DomainCorners)
+// ----------------------------------------------------------------------------
+type FootballCornersOddEvenRule struct{}
+
+func (r *FootballCornersOddEvenRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 1, MarketCode: "FB_CORNERS_ODD_EVEN", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *FootballCornersOddEvenRule) RequiredDomain() string { return DomainCorners }
+func (r *FootballCornersOddEvenRule) Timing() string         { return TimingEventEnd }
+
+func (r *FootballCornersOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainCorners}
+	}
+	corners, ok := state.Corners["FT"]
+	if !ok {
+		return SettlementResult{Status: BetStatusManualReview, Settled: false, Reason: "Corners data not available", RequiredDomain: DomainCorners}
+	}
+	tot := corners.Total()
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isEven := tot%2 == 0
+	won := (isEven && (sel == "EVEN" || sel == "E")) || (!isEven && (sel == "ODD" || sel == "O"))
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainCorners, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainCorners, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Cards Odd/Even (EVENT_END - DomainCards)
+// ----------------------------------------------------------------------------
+type FootballCardsOddEvenRule struct{}
+
+func (r *FootballCardsOddEvenRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 1, MarketCode: "FB_CARDS_ODD_EVEN", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *FootballCardsOddEvenRule) RequiredDomain() string { return DomainCards }
+func (r *FootballCardsOddEvenRule) Timing() string         { return TimingEventEnd }
+
+func (r *FootballCardsOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainCards}
+	}
+	cards, ok := state.Cards["FT"]
+	if !ok {
+		return SettlementResult{Status: BetStatusManualReview, Settled: false, Reason: "Cards data not available", RequiredDomain: DomainCards}
+	}
+	tot := cards.HomeYellow + cards.AwayYellow + cards.HomeRed + cards.AwayRed
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isEven := tot%2 == 0
+	won := (isEven && (sel == "EVEN" || sel == "E")) || (!isEven && (sel == "ODD" || sel == "O"))
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainCards, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainCards, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Cards 1X2 (EVENT_END - DomainCards)
+// ----------------------------------------------------------------------------
+type FootballCards1X2Rule struct{}
+
+func (r *FootballCards1X2Rule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 1, MarketCode: "FB_CARDS_1X2", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *FootballCards1X2Rule) RequiredDomain() string { return DomainCards }
+func (r *FootballCards1X2Rule) Timing() string         { return TimingEventEnd }
+
+func (r *FootballCards1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainCards}
+	}
+	cards, ok := state.Cards["FT"]
+	if !ok {
+		return SettlementResult{Status: BetStatusManualReview, Settled: false, Reason: "Cards data not available", RequiredDomain: DomainCards}
+	}
+	hCards := cards.HomeYellow + cards.HomeRed*2
+	aCards := cards.AwayYellow + cards.AwayRed*2
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	won := (sel == "1" || sel == "HOME") && hCards > aCards ||
+		(sel == "X" || sel == "DRAW") && hCards == aCards ||
+		(sel == "2" || sel == "AWAY") && aCards > hCards
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainCards, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainCards, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// 2nd Half Both Teams To Score (INSTANT_IRREVERSIBLE - PeriodSecondHalf)
+// ----------------------------------------------------------------------------
+type Football2HBTTSRule struct{}
+
+func (r *Football2HBTTSRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 1, MarketCode: "FB_2H_BTTS", Period: PeriodSecondHalf, RuleVersion: 1}
+}
+func (r *Football2HBTTSRule) RequiredDomain() string { return DomainScore }
+func (r *Football2HBTTSRule) Timing() string         { return TimingInstantIrreversible }
+
+func (r *Football2HBTTSRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	ht, ok := state.PeriodScores[PeriodHalfTime]
+	if !ok {
+		if state.IsFinished {
+			return SettlementResult{Status: BetStatusManualReview, Settled: false, Reason: "Missing 1H score for 2H BTTS", RequiredDomain: DomainScore}
+		}
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: DomainScore}
+	}
+	h2 := state.Score.Home - ht.Home
+	a2 := state.Score.Away - ht.Away
+	if h2 < 0 { h2 = 0 }
+	if a2 < 0 { a2 = 0 }
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+
+	if sel == "YES" && h2 > 0 && a2 > 0 {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingInstantIrreversible, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	if state.IsFinished {
+		if sel == "YES" {
+			if h2 > 0 && a2 > 0 {
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+			}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		}
+		if sel == "NO" {
+			if h2 == 0 || a2 == 0 {
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+			}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		}
+	}
+	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: DomainScore}
+}
+
+// ----------------------------------------------------------------------------
+// HT Corners Total (PERIOD_END - DomainCorners)
+// ----------------------------------------------------------------------------
+type FootballHTCornersTotalRule struct{}
+
+func (r *FootballHTCornersTotalRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 1, MarketCode: "FB_HT_CORNERS_TOTAL", Period: PeriodHalfTime, RuleVersion: 1}
+}
+func (r *FootballHTCornersTotalRule) RequiredDomain() string { return DomainCorners }
+func (r *FootballHTCornersTotalRule) Timing() string         { return TimingPeriodEnd }
+
+func (r *FootballHTCornersTotalRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	corners, ok := state.Corners["1H"]
+	if !ok {
+		corners, ok = state.Corners["HT"]
+	}
+	isHTDone := state.IsPeriodFinished[PeriodHalfTime] || state.Status == FixtureStatusHT || state.IsFinished
+	if !ok {
+		if isHTDone {
+			return SettlementResult{Status: BetStatusManualReview, Settled: false, Reason: "HT corners data not available", RequiredDomain: DomainCorners}
+		}
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainCorners}
+	}
+	total := corners.Total()
+	line := 4.5
+	if bet.Line != nil {
+		line = *bet.Line
+	}
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+
+	if sel == "OVER" && float64(total) > line {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingInstantIrreversible, RequiredDomain: DomainCorners, EvaluatedAt: time.Now()}
+	}
+	if sel == "UNDER" && float64(total) > line {
+		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, RequiredDomain: DomainCorners, EvaluatedAt: time.Now()}
+	}
+
+	if isHTDone {
+		switch sel {
+		case "OVER":
+			if float64(total) > line {
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainCorners, EvaluatedAt: time.Now()}
+			}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainCorners, EvaluatedAt: time.Now()}
+		case "UNDER":
+			if float64(total) < line {
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainCorners, EvaluatedAt: time.Now()}
+			}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainCorners, EvaluatedAt: time.Now()}
+		}
+	}
+	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingPeriodEnd, RequiredDomain: DomainCorners}
 }

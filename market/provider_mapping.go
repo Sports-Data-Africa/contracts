@@ -593,10 +593,22 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			if strings.Contains(normDesc, "period 1") || strings.Contains(normDesc, "1st period") {
 				return "IH_PERIOD_1X2", PeriodPeriod1, normSel
 			}
+			if strings.Contains(normDesc, "period 2") || strings.Contains(normDesc, "2nd period") {
+				return "IH_PERIOD_1X2", PeriodPeriod2, normSel
+			}
+			if strings.Contains(normDesc, "period 3") || strings.Contains(normDesc, "3rd period") {
+				return "IH_PERIOD_1X2", PeriodPeriod3, normSel
+			}
 			return "IH_REGULATION_1X2", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "moneyline") || strings.Contains(normDesc, "2 way"):
 			if strings.Contains(normDesc, "period 1") || strings.Contains(normDesc, "1st period") {
 				return "IH_PERIOD_1X2", PeriodPeriod1, normSel
+			}
+			if strings.Contains(normDesc, "period 2") || strings.Contains(normDesc, "2nd period") {
+				return "IH_PERIOD_1X2", PeriodPeriod2, normSel
+			}
+			if strings.Contains(normDesc, "period 3") || strings.Contains(normDesc, "3rd period") {
+				return "IH_PERIOD_1X2", PeriodPeriod3, normSel
 			}
 			return "IH_MONEYLINE", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "puck line") || strings.Contains(normDesc, "handicap"):
@@ -605,7 +617,21 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			if strings.Contains(normDesc, "period 1") || strings.Contains(normDesc, "1st period") {
 				return "IH_PERIOD_TOTALS", PeriodPeriod1, normalizeOverUnder(rawSel)
 			}
+			if strings.Contains(normDesc, "period 2") || strings.Contains(normDesc, "2nd period") {
+				return "IH_PERIOD_TOTALS", PeriodPeriod2, normalizeOverUnder(rawSel)
+			}
+			if strings.Contains(normDesc, "period 3") || strings.Contains(normDesc, "3rd period") {
+				return "IH_PERIOD_TOTALS", PeriodPeriod3, normalizeOverUnder(rawSel)
+			}
+			if strings.Contains(normDesc, "home") {
+				return "IH_HOME_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+			}
+			if strings.Contains(normDesc, "away") {
+				return "IH_AWAY_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+			}
 			return "IH_TOTAL_GOALS", PeriodFullTime, normalizeOverUnder(rawSel)
+		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+			return "IH_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
 
 	case 5: // Volleyball
@@ -613,6 +639,18 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 		case rawID == "1" || strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "match winner") || strings.Contains(normDesc, "2 way"):
 			if strings.Contains(normDesc, "set 1") || strings.Contains(normDesc, "1st set") {
 				return "VB_SET_WINNER", PeriodSet1, normSel
+			}
+			if strings.Contains(normDesc, "set 2") || strings.Contains(normDesc, "2nd set") {
+				return "VB_SET_WINNER", PeriodSet2, normSel
+			}
+			if strings.Contains(normDesc, "set 3") || strings.Contains(normDesc, "3rd set") {
+				return "VB_SET_WINNER", PeriodSet3, normSel
+			}
+			if strings.Contains(normDesc, "set 4") || strings.Contains(normDesc, "4th set") {
+				return "VB_SET_WINNER", PeriodSet4, normSel
+			}
+			if strings.Contains(normDesc, "set 5") || strings.Contains(normDesc, "5th set") {
+				return "VB_SET_WINNER", PeriodSet5, normSel
 			}
 			return "VB_MATCH_WINNER", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "total points") || strings.Contains(normDesc, "over/under"):
@@ -623,6 +661,8 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			return "VB_POINT_HANDICAP", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "correct score"):
 			return "VB_CORRECT_SET_SCORE", PeriodFullTime, rawSel
+		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+			return "VB_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
 
 	case 6: // MMA
@@ -674,17 +714,40 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 	case 9: // American Football
 		switch {
 		case rawID == "1" || strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "moneyline"):
-			if strings.Contains(normDesc, "q1") {
+			if strings.Contains(normDesc, "q1") || strings.Contains(normDesc, "1st quarter") {
 				return "AF_QUARTER_WINNER", PeriodQuarter1, normSel
+			}
+			if strings.Contains(normDesc, "q2") || strings.Contains(normDesc, "2nd quarter") {
+				return "AF_QUARTER_WINNER", PeriodQuarter2, normSel
+			}
+			if strings.Contains(normDesc, "q3") || strings.Contains(normDesc, "3rd quarter") {
+				return "AF_QUARTER_WINNER", PeriodQuarter3, normSel
+			}
+			if strings.Contains(normDesc, "q4") || strings.Contains(normDesc, "4th quarter") {
+				return "AF_QUARTER_WINNER", PeriodQuarter4, normSel
+			}
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "1h") {
+				return "AF_1H_WINNER", PeriodHalfTime, normSel
 			}
 			return "AF_MONEYLINE", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "spread") || strings.Contains(normDesc, "handicap"):
+			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "1h") {
+				return "AF_1H_SPREAD", PeriodHalfTime, normSel
+			}
 			return "AF_SPREAD", PeriodFullTime, normSel
 		case rawID == "68" || strings.Contains(normDesc, "total points") || strings.Contains(normDesc, "over/under"):
 			if rawID == "68" || strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
 				return "AF_TOTAL_POINTS", PeriodHalfTime, normalizeOverUnder(rawSel)
 			}
+			if strings.Contains(normDesc, "home") {
+				return "AF_HOME_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+			}
+			if strings.Contains(normDesc, "away") {
+				return "AF_AWAY_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+			}
 			return "AF_TOTAL_POINTS", PeriodFullTime, normalizeOverUnder(rawSel)
+		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+			return "AF_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
 
 	case 10: // Handball
@@ -696,6 +759,10 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			return "HB_1X2", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "moneyline"):
 			return "HB_MONEYLINE", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "draw no bet") || strings.Contains(normDesc, "dnb"):
+			return "HB_DNB", PeriodFullTime, normSel
+		case strings.Contains(normDesc, "double chance"):
+			return "HB_DOUBLE_CHANCE", PeriodFullTime, normalizeDoubleChance(rawSel)
 		case strings.Contains(normDesc, "handicap"):
 			return "HB_HANDICAP", PeriodFullTime, normSel
 		case rawID == "68" || rawID == "69" || rawID == "70" || strings.Contains(normDesc, "total goals") || strings.Contains(normDesc, "over/under"):
@@ -705,10 +772,18 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			if rawID == "70" || (strings.Contains(normDesc, "away") && (strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "ht"))) {
 				return "HB_AWAY_TOTALS", PeriodHalfTime, normalizeOverUnder(rawSel)
 			}
+			if strings.Contains(normDesc, "home") {
+				return "HB_HOME_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+			}
+			if strings.Contains(normDesc, "away") {
+				return "HB_AWAY_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
+			}
 			if rawID == "68" || strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
 				return "HB_TOTAL_GOALS", PeriodHalfTime, normalizeOverUnder(rawSel)
 			}
 			return "HB_TOTAL_GOALS", PeriodFullTime, normalizeOverUnder(rawSel)
+		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+			return "HB_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
 
 	case 11: // Baseball
@@ -721,7 +796,12 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 		case strings.Contains(normDesc, "run line") || strings.Contains(normDesc, "spread"):
 			return "BS_RUN_LINE", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "total runs") || strings.Contains(normDesc, "over/under"):
+			if strings.Contains(normDesc, "first 5") || strings.Contains(normDesc, "f5") {
+				return "BS_F5_TOTAL", "F5", normalizeOverUnder(rawSel)
+			}
 			return "BS_TOTAL_RUNS", PeriodFullTime, normalizeOverUnder(rawSel)
+		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+			return "BS_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
 
 	case 13: // Table Tennis
@@ -729,6 +809,18 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 		case rawID == "1" || rawID == "245" || strings.Contains(normDesc, "winner") || strings.Contains(normDesc, "match winner"):
 			if rawID == "245" || strings.Contains(normDesc, "game 1") || strings.Contains(normDesc, "1st game") {
 				return "TT_GAME_WINNER", "GAME1", normSel
+			}
+			if strings.Contains(normDesc, "game 2") || strings.Contains(normDesc, "2nd game") {
+				return "TT_GAME_WINNER", "GAME2", normSel
+			}
+			if strings.Contains(normDesc, "game 3") || strings.Contains(normDesc, "3rd game") {
+				return "TT_GAME_WINNER", "GAME3", normSel
+			}
+			if strings.Contains(normDesc, "game 4") || strings.Contains(normDesc, "4th game") {
+				return "TT_GAME_WINNER", "GAME4", normSel
+			}
+			if strings.Contains(normDesc, "game 5") || strings.Contains(normDesc, "5th game") {
+				return "TT_GAME_WINNER", "GAME5", normSel
 			}
 			return "TT_MATCH_WINNER", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "total points") || strings.Contains(normDesc, "over/under"):
@@ -739,6 +831,8 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			return "TT_GAME_HANDICAP", PeriodFullTime, normSel
 		case strings.Contains(normDesc, "correct score"):
 			return "TT_CORRECT_SCORE", PeriodFullTime, rawSel
+		case strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+			return "TT_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 		}
 	}
 

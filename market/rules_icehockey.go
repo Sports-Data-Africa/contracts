@@ -18,6 +18,10 @@ func init() {
 	Register(&IceHockeyPeriod1X2Rule{Period: PeriodPeriod1})
 	Register(&IceHockeyPeriod1X2Rule{Period: PeriodPeriod2})
 	Register(&IceHockeyPeriod1X2Rule{Period: PeriodPeriod3})
+	Register(&IceHockeyOddEvenRule{})
+	Register(&IceHockeyTeamTotalsRule{Team: "HOME"})
+	Register(&IceHockeyTeamTotalsRule{Team: "AWAY"})
+	Register(&IceHockeyTeamTotalsRule{Team: ""})
 }
 
 // ----------------------------------------------------------------------------
@@ -271,4 +275,82 @@ func (r *IceHockeyPeriodTotalsRule) Evaluate(state CanonicalEventState, bet BetS
 	}
 
 	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: DomainPeriodScore}
+}
+
+// ----------------------------------------------------------------------------
+// Odd/Even Total Goals (EVENT_END)
+// ----------------------------------------------------------------------------
+type IceHockeyOddEvenRule struct{}
+
+func (r *IceHockeyOddEvenRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 4, MarketCode: "IH_ODD_EVEN", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *IceHockeyOddEvenRule) RequiredDomain() string { return DomainScore }
+func (r *IceHockeyOddEvenRule) Timing() string         { return TimingEventEnd }
+
+func (r *IceHockeyOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+	tot := state.Score.Home + state.Score.Away
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isEven := tot%2 == 0
+	won := (isEven && (sel == "EVEN" || sel == "E")) || (!isEven && (sel == "ODD" || sel == "O"))
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Team Totals (INSTANT_IRREVERSIBLE)
+// ----------------------------------------------------------------------------
+type IceHockeyTeamTotalsRule struct {
+	Team string // "HOME" or "AWAY"
+}
+
+func (r *IceHockeyTeamTotalsRule) Key() MarketRuleKey {
+	code := "IH_TEAM_TOTALS"
+	switch strings.ToUpper(r.Team) {
+	case "HOME":
+		code = "IH_HOME_TOTALS"
+	case "AWAY":
+		code = "IH_AWAY_TOTALS"
+	}
+	return MarketRuleKey{SportID: 4, MarketCode: code, Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *IceHockeyTeamTotalsRule) RequiredDomain() string { return DomainScore }
+func (r *IceHockeyTeamTotalsRule) Timing() string         { return TimingInstantIrreversible }
+
+func (r *IceHockeyTeamTotalsRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	goals := state.Score.Home
+	if strings.ToUpper(r.Team) == "AWAY" {
+		goals = state.Score.Away
+	}
+	line := 2.5
+	if bet.Line != nil {
+		line = *bet.Line
+	}
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if sel == "OVER" && float64(goals) > line {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingInstantIrreversible, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	if sel == "UNDER" && float64(goals) > line {
+		return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingInstantIrreversible, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	if state.IsFinished {
+		if sel == "OVER" {
+			if float64(goals) > line {
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+			}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		}
+		if sel == "UNDER" {
+			if float64(goals) < line {
+				return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+			}
+			return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+		}
+	}
+	return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingInstantIrreversible, RequiredDomain: DomainScore}
 }

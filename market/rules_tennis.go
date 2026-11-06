@@ -16,6 +16,8 @@ func init() {
 	Register(&TennisGameHandicapRule{})
 	Register(&TennisSetHandicapRule{})
 	Register(&TennisCorrectSetScoreRule{})
+	Register(&TennisSetWinnerRule{SetNumber: 4, Period: PeriodSet4})
+	Register(&TennisSetWinnerRule{SetNumber: 5, Period: PeriodSet5})
 }
 
 // ----------------------------------------------------------------------------

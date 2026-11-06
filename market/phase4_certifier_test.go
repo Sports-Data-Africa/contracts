@@ -390,12 +390,12 @@ func TestPhase4_1_ForensicReconciliationMatrix(t *testing.T) {
 			certMatrix.CertifiedCount, certMatrix.NotCertifiedCount, certMatrix.QuarantinedCount)
 	}
 
-	// 3. Exact counts: 46 certified, 63 not certified, 60 quarantined
-	if certMatrix.CertifiedCount != 46 {
-		t.Errorf("Certified count mismatch: got %d, want 46", certMatrix.CertifiedCount)
+	// 3. Exact counts: 49 certified, 60 not certified, 60 quarantined
+	if certMatrix.CertifiedCount != 49 {
+		t.Errorf("Certified count mismatch: got %d, want 49", certMatrix.CertifiedCount)
 	}
-	if certMatrix.NotCertifiedCount != 63 {
-		t.Errorf("Not certified count mismatch: got %d, want 63", certMatrix.NotCertifiedCount)
+	if certMatrix.NotCertifiedCount != 60 {
+		t.Errorf("Not certified count mismatch: got %d, want 60", certMatrix.NotCertifiedCount)
 	}
 	if certMatrix.QuarantinedCount != 60 {
 		t.Errorf("Quarantined count mismatch: got %d, want 60", certMatrix.QuarantinedCount)
@@ -409,14 +409,14 @@ func TestPhase4_1_ForensicReconciliationMatrix(t *testing.T) {
 		sumNotCert += sb.NotCertified
 		sumQuar += sb.Quarantined
 	}
-	if sumTotal != 169 || sumCert != 46 || sumNotCert != 63 || sumQuar != 60 {
-		t.Fatalf("Per-sport sums contradict overall totals: total=%d (want 169), cert=%d (want 46), not_cert=%d (want 63), quar=%d (want 60)",
+	if sumTotal != 169 || sumCert != 49 || sumNotCert != 60 || sumQuar != 60 {
+		t.Fatalf("Per-sport sums contradict overall totals: total=%d (want 169), cert=%d (want 49), not_cert=%d (want 60), quar=%d (want 60)",
 			sumTotal, sumCert, sumNotCert, sumQuar)
 	}
 
-	// 5. Detailed list count invariant: exactly 46 certified entries
-	if len(certifiedList) != 46 {
-		t.Fatalf("Detailed certified list length mismatch: got %d, want 46", len(certifiedList))
+	// 5. Detailed list count invariant: exactly 49 certified entries
+	if len(certifiedList) != 49 {
+		t.Fatalf("Detailed certified list length mismatch: got %d, want 49", len(certifiedList))
 	}
 
 	// 6. Sport-specific forensic reconciliation assertions
@@ -434,8 +434,8 @@ func TestPhase4_1_ForensicReconciliationMatrix(t *testing.T) {
 
 	// C. Handball (Sport 10)
 	hb := sportBreakdown[10]
-	if hb == nil || hb.Total != 31 || hb.Certified != 8 || hb.NotCertified != 18 || hb.Quarantined != 5 {
-		t.Errorf("Handball breakdown mismatch: got %+v, want Total=31, Cert=8, NotCert=18, Quar=5", hb)
+	if hb == nil || hb.Total != 31 || hb.Certified != 9 || hb.NotCertified != 17 || hb.Quarantined != 5 {
+		t.Errorf("Handball breakdown mismatch: got %+v, want Total=31, Cert=9, NotCert=17, Quar=5", hb)
 	}
 
 	// D. Football (Sport 1)
@@ -1031,8 +1031,8 @@ func TestPhase4_2_CertifiedRuleSemanticsAndResultDataIntegrityAudit(t *testing.T
 		})
 	}
 
-	if len(auditedItems) != 46 {
-		t.Fatalf("Expected exactly 46 audited certified items, got %d", len(auditedItems))
+	if len(auditedItems) != 49 {
+		t.Fatalf("Expected exactly 49 audited certified items, got %d", len(auditedItems))
 	}
 
 	// 6. Explicit Divergent Period Assertions (The 10 Mandatory Cases):

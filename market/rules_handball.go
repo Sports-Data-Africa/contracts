@@ -19,6 +19,9 @@ func init() {
 	Register(&HandballTotalsRule{Period: PeriodFullTime, Team: "AWAY"})
 	Register(&HandballHT1X2Rule{MarketCode: "HB_HT_1X2"})
 	Register(&HandballHT1X2Rule{MarketCode: "HB_1X2"})
+	Register(&HandballDNBRule{})
+	Register(&HandballDoubleChanceRule{})
+	Register(&HandballOddEvenRule{})
 }
 
 // ----------------------------------------------------------------------------
@@ -272,4 +275,82 @@ func (r *HandballHT1X2Rule) Evaluate(state CanonicalEventState, bet BetSelection
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
 	}
 	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingPeriodEnd, RequiredDomain: DomainPeriodScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Draw No Bet (EVENT_END)
+// ----------------------------------------------------------------------------
+type HandballDNBRule struct{}
+
+func (r *HandballDNBRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 10, MarketCode: "HB_DNB", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *HandballDNBRule) RequiredDomain() string { return DomainScore }
+func (r *HandballDNBRule) Timing() string         { return TimingEventEnd }
+
+func (r *HandballDNBRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+	h, a := state.Score.Home, state.Score.Away
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	if h == a {
+		return SettlementResult{Status: BetStatusPush, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, Reason: "Handball match draw (DNB push)", RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	won := (sel == "1" || sel == "HOME") && h > a || (sel == "2" || sel == "AWAY") && a > h
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Double Chance (EVENT_END)
+// ----------------------------------------------------------------------------
+type HandballDoubleChanceRule struct{}
+
+func (r *HandballDoubleChanceRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 10, MarketCode: "HB_DOUBLE_CHANCE", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *HandballDoubleChanceRule) RequiredDomain() string { return DomainScore }
+func (r *HandballDoubleChanceRule) Timing() string         { return TimingEventEnd }
+
+func (r *HandballDoubleChanceRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+	h, a := state.Score.Home, state.Score.Away
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	won := (sel == "1X" && h >= a) ||
+		(sel == "12" && h != a) ||
+		(sel == "X2" && a >= h)
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Odd/Even Total Goals (EVENT_END)
+// ----------------------------------------------------------------------------
+type HandballOddEvenRule struct{}
+
+func (r *HandballOddEvenRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 10, MarketCode: "HB_ODD_EVEN", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *HandballOddEvenRule) RequiredDomain() string { return DomainScore }
+func (r *HandballOddEvenRule) Timing() string         { return TimingEventEnd }
+
+func (r *HandballOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainScore}
+	}
+	tot := state.Score.Home + state.Score.Away
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isEven := tot%2 == 0
+	won := (isEven && (sel == "EVEN" || sel == "E")) || (!isEven && (sel == "ODD" || sel == "O"))
+	if won {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainScore, EvaluatedAt: time.Now()}
 }

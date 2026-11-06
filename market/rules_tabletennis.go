@@ -21,6 +21,7 @@ func init() {
 	Register(&TableTennisPointHandicapRule{})
 	Register(&TableTennisGameHandicapRule{})
 	Register(&TableTennisCorrectScoreRule{})
+	Register(&TableTennisOddEvenRule{})
 }
 
 // ----------------------------------------------------------------------------
@@ -255,6 +256,31 @@ func (r *TableTennisCorrectScoreRule) Evaluate(state CanonicalEventState, bet Be
 	actualHyphen := fmt.Sprintf("%d-%d", state.Score.Home, state.Score.Away)
 
 	if target == actualColon || target == actualHyphen {
+		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainGames, EvaluatedAt: time.Now()}
+	}
+	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainGames, EvaluatedAt: time.Now()}
+}
+
+// ----------------------------------------------------------------------------
+// Odd/Even Total Games (EVENT_END)
+// ----------------------------------------------------------------------------
+type TableTennisOddEvenRule struct{}
+
+func (r *TableTennisOddEvenRule) Key() MarketRuleKey {
+	return MarketRuleKey{SportID: 13, MarketCode: "TT_ODD_EVEN", Period: PeriodFullTime, RuleVersion: 1}
+}
+func (r *TableTennisOddEvenRule) RequiredDomain() string { return DomainGames }
+func (r *TableTennisOddEvenRule) Timing() string         { return TimingEventEnd }
+
+func (r *TableTennisOddEvenRule) Evaluate(state CanonicalEventState, bet BetSelection) SettlementResult {
+	if !state.IsFinished {
+		return SettlementResult{Status: BetStatusOpen, Settled: false, Timing: TimingEventEnd, RequiredDomain: DomainGames}
+	}
+	tot := state.Score.Home + state.Score.Away
+	sel := strings.ToUpper(strings.TrimSpace(bet.SelectionCode))
+	isEven := tot%2 == 0
+	won := (isEven && (sel == "EVEN" || sel == "E")) || (!isEven && (sel == "ODD" || sel == "O"))
+	if won {
 		return SettlementResult{Status: BetStatusWon, PayoutFactor: 1.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainGames, EvaluatedAt: time.Now()}
 	}
 	return SettlementResult{Status: BetStatusLost, PayoutFactor: 0.0, Settled: true, Timing: TimingEventEnd, RequiredDomain: DomainGames, EvaluatedAt: time.Now()}

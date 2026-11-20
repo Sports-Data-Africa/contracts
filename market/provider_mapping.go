@@ -444,7 +444,7 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			return "FB_WIN_TO_NIL", PeriodFullTime, normSel
 
 		// 11. Odd/Even
-		case rawID == "20" || strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
+		case (rawID == "20" && !strings.Contains(normDesc, "over") && !strings.Contains(normDesc, "under") && !strings.Contains(normDesc, "total")) || strings.Contains(normDesc, "odd/even") || strings.Contains(normDesc, "odd or even"):
 			if strings.Contains(normDesc, "home") || strings.Contains(normDesc, "team 1") {
 				return "FB_HOME_ODD_EVEN", PeriodFullTime, normalizeOddEven(rawSel)
 			}
@@ -464,12 +464,12 @@ func mapSportyBet(sportID int, rawID, normDesc, rawSel string) (string, string, 
 			return "FB_CORRECT_SCORE", PeriodFullTime, rawSel
 
 		// 13. Team Totals
-		case strings.Contains(normDesc, "home total") || strings.Contains(normDesc, "team 1 total"):
+		case rawID == "19" || strings.Contains(normDesc, "home total") || strings.Contains(normDesc, "team 1 total") || strings.Contains(normDesc, "home over/under") || strings.Contains(normDesc, "team 1 over/under"):
 			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
 				return "FB_HOME_TOTALS_HT", PeriodHalfTime, normalizeOverUnder(rawSel)
 			}
 			return "FB_HOME_TOTALS", PeriodFullTime, normalizeOverUnder(rawSel)
-		case strings.Contains(normDesc, "away total") || strings.Contains(normDesc, "team 2 total"):
+		case (rawID == "20" && (strings.Contains(normDesc, "over") || strings.Contains(normDesc, "under") || strings.Contains(normDesc, "total"))) || strings.Contains(normDesc, "away total") || strings.Contains(normDesc, "team 2 total") || strings.Contains(normDesc, "away over/under") || strings.Contains(normDesc, "team 2 over/under"):
 			if strings.Contains(normDesc, "1st half") || strings.Contains(normDesc, "first half") || strings.Contains(normDesc, "ht") {
 				return "FB_AWAY_TOTALS_HT", PeriodHalfTime, normalizeOverUnder(rawSel)
 			}

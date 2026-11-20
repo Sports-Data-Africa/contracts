@@ -13,7 +13,7 @@ import (
 
 func TestGenerateContractCertificationMatrixCSV(t *testing.T) {
 	defs := ListAllMarketDefinitions()
-	if len(defs) != 176 {
+	if len(defs) != 176 { /*  */
 		t.Fatalf("Expected exactly 176 canonical market definitions in catalogue, got %d", len(defs))
 	}
 
@@ -217,4 +217,3 @@ func TestGenerateContractCertificationMatrixCSV(t *testing.T) {
 
 	t.Logf("Successfully wrote %d canonical contracts to %s", len(records)-1, targetPath)
 }
-

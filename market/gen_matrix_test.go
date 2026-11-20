@@ -44,7 +44,7 @@ func TestGenerateContractCertificationMatrixCSV(t *testing.T) {
 	}
 
 	// Provider mappings lookup based on provider_mapping.go
-	providerMapDesc := func(sportID int, code, period string) string {
+	providerMapDesc := func(sportID int, code, _ string) string {
 		switch code {
 		case "FB_1X2":
 			return "SportyBet (ID 1), Odibets (1X2)"

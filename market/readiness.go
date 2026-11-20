@@ -287,6 +287,9 @@ func ensureLedgerReplayed() {
 		}
 		replayLedgerRecord(rec)
 	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "readiness: ledger replay scan error: %v\n", err)
+	}
 }
 
 func replayLedgerRecord(rec evidenceRecord) {

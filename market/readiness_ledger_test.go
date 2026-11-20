@@ -181,7 +181,7 @@ func TestResultDataLossRevokesStage(t *testing.T) {
 
 // mutateLedgerRuleVersion rewrites the recorded rule_version of every ledger entry
 // for a code, simulating a rule upgrade that happened after evidence was recorded.
-func mutateLedgerRuleVersion(t *testing.T, sportID int, code, period, workflow string, newVersion int) {
+func mutateLedgerRuleVersion(t *testing.T, _ int, code, _, workflow string, newVersion int) {
 	t.Helper()
 	f := ledgerPath()
 	if f == "" {
